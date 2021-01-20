@@ -1,4 +1,5 @@
 //! ported basically verbatim from original JS
+use anyhow::{Context, Result};
 use heck::KebabCase;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -175,23 +176,17 @@ fn get_multiline_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<String> {
 
 const SPLIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("(?m)^-{8,}\n").unwrap());
 
-pub fn parse_artist(string: &str) -> Option<Artist> {
-    Some(Artist {
-        name: get_basic_field(string, "Artist")?,
+pub fn parse_artist(string: &str) -> Result<Artist> {
+    Ok(Artist {
+        name: get_basic_field(string, "Artist").context("no Artist")?,
         urls: get_list_field(string, "URLs").unwrap_or_else(Vec::new),
         alias: get_basic_field(string, "Alias"),
         note: get_multiline_field(string, "Note"),
     })
 }
 
-pub fn parse_artists(string: &str) -> Option<Vec<Artist>> {
-    let mut res = vec![];
-
-    for string in SPLIT_REGEX.split(string) {
-        res.push(parse_artist(string)?);
-    }
-
-    Some(res)
+pub fn parse_artists(string: &str) -> Result<Vec<Artist>> {
+    SPLIT_REGEX.split(string).map(parse_artist).collect()
 }
 
 fn get_duration_in_seconds(duration: &str) -> usize {
@@ -217,10 +212,10 @@ pub fn parse_track<'a>(
     track_art_date: &'a str,
     artists: &Option<Vec<Contributor<'a>>>,
     color: &'a str,
-) -> Option<Track<'a>> {
-    let name = get_basic_field(section, "Track")?;
+) -> Result<Track<'a>> {
+    let name = get_basic_field(section, "Track").context("missing Track")?;
     let original_date = get_basic_field(section, "Original Date");
-    Some(Track {
+    Ok(Track {
         name,
         commentary: get_multiline_field(section, "Commentary"),
         lyrics: get_multiline_field(section, "Lyrics"),
@@ -231,7 +226,8 @@ pub fn parse_track<'a>(
         references: get_list_field(section, "References").unwrap_or_default(),
         artists: get_contribution_field(section, "Artists")
             .or_else(|| get_contribution_field(section, "Artist"))
-            .or_else(|| artists.clone())?,
+            .or_else(|| artists.clone())
+            .context("missing Artists")?,
         cover_artists: match get_contribution_field(section, "Track Art") {
             Some(cover_artists) if cover_artists.len() > 0 && cover_artists[0].who == "none" => {
                 None
@@ -256,17 +252,17 @@ pub fn parse_track<'a>(
     })
 }
 
-pub fn parse_album(string: &str) -> Option<Album> {
+pub fn parse_album(string: &str) -> Result<Album> {
     let mut tracks = vec![];
 
     let regex = &*SPLIT_REGEX;
     let mut split = regex.split(string);
-    let album_section = split.next()?;
+    let album_section = split.next().context("no album section")?;
 
-    let name = get_basic_field(album_section, "Album")?;
+    let name = get_basic_field(album_section, "Album").context("no Album")?;
     let artists = get_contribution_field(album_section, "Artists")
         .or_else(|| get_contribution_field(album_section, "Artist"));
-    let date = get_basic_field(album_section, "Date")?;
+    let date = get_basic_field(album_section, "Date").context("no Date")?;
     let color = get_basic_field(album_section, "FG").unwrap_or("#0088ff");
     let track_art_date = get_basic_field(album_section, "Track Art Date").unwrap_or(date);
 
@@ -295,7 +291,7 @@ pub fn parse_album(string: &str) -> Option<Album> {
         }
     }
 
-    Some(Album {
+    Ok(Album {
         name,
         artists,
         date,
