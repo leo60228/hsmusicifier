@@ -1,3 +1,3 @@
 pub mod bandcamp;
+pub mod hsmusic;
 pub mod locate;
-pub mod parse;
