@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use hsmusicifier::{bandcamp, hsmusic, locate::*};
+use id3::{frame::PictureType, Tag};
 use std::env::args_os;
 use std::fs::{read_dir, read_to_string, File};
 use std::io::{prelude::*, BufReader, BufWriter, SeekFrom};
@@ -53,22 +54,24 @@ fn main() -> Result<()> {
         reader.read(&mut header)?;
         reader.seek(SeekFrom::Start(0))?;
 
+        let mut out_file = File::create(out_path)?;
+
         if &header == b"ID3" {
-            let out_file = File::create(out_path)?;
             let mut writer = BufWriter::new(out_file);
 
-            let tag = id3::Tag::read_from(&mut reader)?;
+            let mut tag = Tag::read_from(&mut reader)?;
 
-            let bandcamp = find_bandcamp_from_id3(&tag, &bandcamp_albums);
-            println!("bandcamp: {:?}", bandcamp);
+            let (album, track) = find_hsmusic_from_id3(&tag, &bandcamp_albums, &hsmusic_albums)?;
+            println!("hsmusic ({:?}): {:?}", album.name, track);
 
-            let hsmusic = find_hsmusic_from_id3(&tag, &bandcamp_albums, &hsmusic_albums)?;
-            println!("hsmusic ({:?}): {:?}", hsmusic.0.name, hsmusic.1);
+            tag.remove_picture_by_type(PictureType::CoverFront);
+            tag.add_picture(track.picture(&album, &hsmusic)?);
 
             tag.write_to(&mut writer, id3::Version::Id3v23)?; // write id3
             std::io::copy(&mut reader, &mut writer)?; // write mp3
         } else {
             println!("not id3");
+            std::io::copy(&mut reader, &mut out_file)?;
         }
     }
 
