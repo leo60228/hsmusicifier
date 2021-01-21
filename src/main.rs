@@ -1,7 +1,7 @@
 use anyhow::Result;
 use hsmusicifier::{bandcamp, hsmusic, locate::*};
 use id3::{frame::PictureType, Tag};
-use std::fs::{read_dir, read_to_string, File};
+use std::fs::{create_dir_all, read_dir, read_to_string, File};
 use std::io::{prelude::*, BufReader, BufWriter, SeekFrom};
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -88,6 +88,10 @@ fn main() -> Result<()> {
         let mut header = [0; 3];
         reader.read(&mut header)?;
         reader.seek(SeekFrom::Start(0))?;
+
+        if let Some(parent) = out_path.parent() {
+            create_dir_all(parent)?;
+        }
 
         let mut out_file = File::create(out_path)?;
 
