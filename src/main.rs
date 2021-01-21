@@ -96,7 +96,7 @@ fn main() -> Result<()> {
             let (album, track) = find_hsmusic_from_id3(&tag, &bandcamp_albums, &hsmusic_albums)?;
 
             if verbose {
-                println!("hsmusic ({:?}): {:?}", album.name, track);
+                println!("hsmusic ({:?}): {:?}", album.name, track.name);
             }
 
             tag.remove_picture_by_type(PictureType::CoverFront);
