@@ -12,7 +12,14 @@ impl Track<'_> {
         path.push(&*self.directory);
         path.set_extension("jpg");
 
-        let data = std::fs::read(&path)?;
+        let data = match std::fs::read(&path) {
+            Ok(data) => data,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                path.set_file_name("cover.jpg");
+                std::fs::read(&path)?
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(Picture {
             mime_type: "image/jpeg".to_string(),
