@@ -48,7 +48,6 @@ fn main() -> Result<()> {
     let bandcamp_file = File::open(bandcamp_json)?;
     let bandcamp_reader = BufReader::new(bandcamp_file);
     let bandcamp_albums: Vec<bandcamp::Album> = serde_json::from_reader(bandcamp_reader)?;
-    let bandcamp_lookup = build_bandcamp_lookup(&bandcamp_albums);
 
     let hsmusic_albums_path = {
         let mut p = hsmusic.clone();
@@ -68,8 +67,6 @@ fn main() -> Result<()> {
         .iter()
         .map(|x| hsmusic::parse_album(x))
         .collect::<Result<_>>()?;
-
-    let hsmusic_lookup = build_hsmusic_lookup(&bandcamp_lookup, &hsmusic_albums);
 
     for entry in WalkDir::new(&in_dir) {
         let entry = entry?;
@@ -100,11 +97,10 @@ fn main() -> Result<()> {
 
             let mut tag = Tag::read_from(&mut reader)?;
 
-            let (album, track) =
-                lookup_hsmusic_from_id3(&tag, &bandcamp_lookup, &hsmusic_albums, &hsmusic_lookup)?;
+            let (album, track) = find_hsmusic_from_id3(&tag, &bandcamp_albums, &hsmusic_albums)?;
 
             if verbose {
-                println!("hsmusic ({}): {}", album.name, track.name);
+                println!("hsmusic ({:?}): {:?}", album.name, track.name);
             }
 
             tag.remove_picture_by_type(PictureType::CoverFront);
