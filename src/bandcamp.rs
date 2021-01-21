@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use htmlescape::decode_html;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -73,13 +74,15 @@ pub fn album(url: &str) -> Result<Album> {
             .track
             .item_list_element
             .into_iter()
-            .map(|json| Track {
-                name: json.item.name,
-                url: json.item.url,
-                num: json.position,
+            .map(|json| {
+                Ok(Track {
+                    name: decode_html(&json.item.name).map_err(|x| anyhow!("{:?}", x))?,
+                    url: json.item.url,
+                    num: json.position,
+                })
             })
-            .collect(),
-        name: album_json.name,
+            .collect::<Result<_>>()?,
+        name: decode_html(&album_json.name).map_err(|x| anyhow!("{:?}", x))?,
     })
 }
 
