@@ -5,7 +5,7 @@ use std::convert::TryInto;
 pub fn find_bandcamp_from_id3<'a, 'b>(
     tag: &'a id3::Tag,
     albums: &'b [bandcamp::Album],
-) -> Result<&'b bandcamp::Track> {
+) -> Result<Option<&'b bandcamp::Track>> {
     let album_name = tag.album().context("missing album")?;
     let mut track_num: usize = tag.track().context("missing track")?.try_into()?;
 
@@ -14,12 +14,12 @@ pub fn find_bandcamp_from_id3<'a, 'b>(
         track_num -= 1;
     }
 
-    let album = albums
-        .iter()
-        .find(|x| x.name == album_name)
-        .ok_or_else(|| anyhow!("couldn't find album {:?}", album_name))?;
-    let track = &album.tracks[track_num - 1];
-    Ok(track)
+    if let Some(album) = albums.iter().find(|x| x.name == album_name) {
+        let track = &album.tracks[track_num - 1];
+        Ok(Some(track))
+    } else {
+        Ok(None)
+    }
 }
 
 fn find_hsmusic<'a>(
@@ -67,9 +67,18 @@ pub fn find_hsmusic_from_id3<'a, 'b, 'c>(
 ) -> Result<(&'c hsmusic::Album<'c>, &'c hsmusic::Track<'c>)> {
     if let Some(special) = special_hsmusic_from_id3(id3, hsmusic_albums)? {
         Ok(special)
-    } else {
-        let bandcamp = find_bandcamp_from_id3(id3, bandcamp_albums)?;
+    } else if let Some(bandcamp) = find_bandcamp_from_id3(id3, bandcamp_albums)? {
         let hsmusic = find_hsmusic_from_bandcamp(bandcamp, hsmusic_albums)?;
         Ok(hsmusic)
+    } else {
+        let album_name = id3.album().context("missing album")?;
+        let track_num: usize = id3.track().context("missing track")?.try_into()?;
+
+        let album = hsmusic_albums
+            .iter()
+            .find(|x| x.name == album_name)
+            .context("couldn't find album")?;
+        let track = &album.tracks[track_num - 1];
+        Ok((album, track))
     }
 }
