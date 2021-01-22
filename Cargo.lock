@@ -329,8 +329,7 @@ dependencies = [
 [[package]]
 name = "ffmpeg-sys-next"
 version = "4.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fde8cbf91a1b044b86d9e9e944c33806a68f5e34e4281033594ceaab47a3746"
+source = "git+https://github.com/leo60228/rust-ffmpeg-sys.git?branch=stack-overflow-backtrace#491583cc7aa596945ccf84e0a21c6313f435de29"
 dependencies = [
  "bindgen",
  "cc",
@@ -1300,11 +1299,11 @@ checksum = "8eaa81235c7058867fa8c0e7314f33dcce9c215f535d1913822a2b3f5e289f3c"
 
 [[package]]
 name = "thread_local"
-version = "1.1.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb9bc092d0d51e76b2b19d9d85534ffc9ec2db959a2523cdae0697e2972cd447"
+checksum = "301bdd13d23c49672926be451130892d274d3ba0b410c18e00daa7990ff38d99"
 dependencies = [
- "lazy_static",
+ "once_cell",
 ]
 
 [[package]]
