@@ -721,8 +721,7 @@ checksum = "e4a24736216ec316047a1fc4252e27dabb04218aa4a3f37c6e7ddbf1f9782b54"
 [[package]]
 name = "nfd"
 version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e752e3c216bc8a491c5b59fa46da10f1379ae450b19ac688e07f4bb55042e98"
+source = "git+https://github.com/saurvs/nfd-rs.git#07578c5fea4d7b1f35fbf128f04b6264c3bf3c5a"
 dependencies = [
  "gcc",
 ]
