@@ -58,11 +58,12 @@ jobs:
           directory: ${{ runner.temp }}/llvm
           cached: ${{ steps.cache-llvm.outputs.cache-hit }}
       - name: Install ffmpeg
-        uses: lukka/run-vcpkg@v6
-        with:
-          vcpkgGitCommitId: '3b433e5081f35a32331492d98a8b0c1c2477048e'
-          vcpkgTriplet: x64-windows
-          vcpkgArguments: ffmpeg
+        run: |
+          wget -O ffmpeg.zip https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2021-01-22-12-57/ffmpeg-N-100732-g07a18ff477-win64-gpl-shared.zip
+          unzip -d "$FFMPEG_DIR" ffmpeg.zip && f=("$FFMPEG_DIR"/*) && mv "$FFMPEG_DIR"/*/* "$FFMPEG_DIR" && rmdir "${f[@]}"
+          rm ffmpeg.zip
+        env:
+          FFMPEG_DIR: ${{ runner.temp }}/ffmpeg
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -74,6 +75,7 @@ jobs:
           args: --all --release -Z features=itarget
         env:
           LIBCLANG_PATH: ${{ runner.temp }}/llvm/bin
+          FFMPEG_DIR: ${{ runner.temp }}/ffmpeg
       - uses: actions/upload-artifact@v2
         with:
           name: windows-bin
