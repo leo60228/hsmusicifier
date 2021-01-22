@@ -45,13 +45,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install ffmpeg
-        run: |
-          Invoke-WebRequest -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2021-01-22-12-57/ffmpeg-N-100732-g07a18ff477-win64-gpl-shared.zip -OutFile ffmpeg.zip
-          Expand-Archive ffmpeg.zip -DestinationPath "$env:FFMPEG_DIR"
-          rm ffmpeg.zip
-        env:
-          FFMPEG_DIR: ${{ runner.temp }}
       - name: Cache LLVM and Clang
         id: cache-llvm
         uses: actions/cache@v2
