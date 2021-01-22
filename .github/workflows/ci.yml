@@ -65,7 +65,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all --release
+          args: --all --release -vv
         env:
           LIBCLANG_PATH: ${{ runner.temp }}/llvm/bin
       - uses: actions/upload-artifact@v2
