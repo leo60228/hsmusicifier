@@ -1,4 +1,4 @@
-use anyhow::{ensure, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use iui::{controls::*, prelude::*};
 use nfd::Response;
 use std::cell::RefCell;
@@ -36,19 +36,36 @@ fn spawn_thread(
     progress: Arc<AtomicI8>,
     tx: mpsc::Sender<Result<()>>,
 ) {
-    thread.replace(Some(thread::spawn(move || {
-        tx.send(hsmusicifier::add_art(
-            bandcamp_json,
-            hsmusic,
-            true,
-            input,
-            output,
-            |done, total| {
-                progress.store((done * 100 / total) as i8, Ordering::SeqCst);
-            },
-        ))
-        .unwrap();
-    })));
+    thread.replace(Some(thread::spawn(
+        move || match std::panic::catch_unwind(|| {
+            hsmusicifier::add_art(
+                bandcamp_json,
+                hsmusic,
+                true,
+                input,
+                output,
+                |done, total| {
+                    progress.store((done * 100 / total) as i8, Ordering::SeqCst);
+                },
+            )
+        }) {
+            Ok(Ok(())) => tx.send(Ok(())).unwrap(),
+            Ok(Err(err)) => tx.send(Err(err)).unwrap(),
+            Err(panic) => {
+                let msg = match panic.downcast_ref::<&'static str>() {
+                    Some(s) => *s,
+                    None => match panic.downcast_ref::<String>() {
+                        Some(s) => &s[..],
+                        None => "Box<Any>",
+                    },
+                };
+
+                tx.send(Err(anyhow!("panicked at '{}'", msg))).unwrap();
+
+                std::panic::resume_unwind(panic);
+            }
+        },
+    )));
 }
 
 fn run(ui: UI, mut win: Window) -> Result<()> {
