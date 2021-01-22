@@ -34,7 +34,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all --release -Z features=itarget
+          args: --all --release
       - uses: actions/upload-artifact@v2
         with:
           name: linux-bin
@@ -65,7 +65,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all --release -Z features=itarget
+          args: --all --release
         env:
           LIBCLANG_PATH: ${{ runner.temp }}/llvm/bin
           FFMPEG_DIR: ${{ runner.temp }}/ffmpeg-N-100732-g07a18ff477-win64-gpl-shared
@@ -106,4 +106,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -Z features=itarget -- -D warnings
+          args: -- -D warnings
