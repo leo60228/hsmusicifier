@@ -1,9 +1,10 @@
 //! ported basically verbatim from original JS
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use either::{Left, Right};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::borrow::Cow;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Contributor<'a> {
@@ -37,6 +38,24 @@ pub struct Track<'a> {
     pub urls: Vec<&'a str>,
     pub group: &'a str,
     pub color: &'a str,
+}
+
+impl Track<'_> {
+    pub fn picture(&self, album: &Album, path: impl AsRef<Path>) -> Result<PathBuf> {
+        let mut path: PathBuf = path.as_ref().into();
+        path.push("media");
+        path.push("album-art");
+        path.push(&*album.directory);
+        path.push(&*self.directory);
+        path.set_extension("jpg");
+
+        if !path.is_file() {
+            path.set_file_name("cover.jpg");
+            ensure!(path.is_file(), "couldn't find cover for {}", self.name);
+        }
+
+        Ok(path)
+    }
 }
 
 #[derive(Debug)]

@@ -1,14 +1,11 @@
 use crate::{bandcamp, hsmusic};
 use anyhow::{anyhow, Context, Result};
-use std::convert::TryInto;
 
-pub fn find_bandcamp_from_id3<'a, 'b>(
-    tag: &'a id3::Tag,
+pub fn find_bandcamp_from_album_track<'a, 'b>(
+    album_name: &'a str,
+    mut track_num: usize,
     albums: &'b [bandcamp::Album],
 ) -> Result<Option<&'b bandcamp::Track>> {
-    let album_name = tag.album().context("missing album")?;
-    let mut track_num: usize = tag.track().context("missing track")?.try_into()?;
-
     // frustracean
     if album_name == "Homestuck Vol. 9-10 (with [S] Collide. and Act 7)" && track_num >= 52 {
         track_num -= 1;
@@ -42,14 +39,12 @@ pub fn find_hsmusic_from_bandcamp<'a, 'b>(
     .ok_or_else(|| anyhow!("couldn't find track {:?}", bandcamp.name))
 }
 
-fn special_hsmusic_from_id3<'a, 'b>(
-    tag: &'a id3::Tag,
+fn special_hsmusic_from_album_track<'a, 'b>(
+    album_name: &'a str,
+    track_num: usize,
     albums: &'b [hsmusic::Album<'b>],
-) -> Result<Option<(&'b hsmusic::Album<'b>, &'b hsmusic::Track<'b>)>> {
-    let album_name = tag.album().context("missing album")?;
-    let track_num = tag.track().context("missing track")?;
-
-    Ok(match (album_name, track_num) {
+) -> Option<(&'b hsmusic::Album<'b>, &'b hsmusic::Track<'b>)> {
+    match (album_name, track_num) {
         ("Homestuck Vol. 9-10 (with [S] Collide. and Act 7)", 51) => {
             find_hsmusic(albums, |_, track| track.name == "Frustracean")
         }
@@ -57,23 +52,23 @@ fn special_hsmusic_from_id3<'a, 'b>(
             find_hsmusic(albums, |_, track| track.name == "Objection")
         }
         _ => None,
-    })
+    }
 }
 
-pub fn find_hsmusic_from_id3<'a, 'b, 'c>(
-    id3: &'a id3::Tag,
+pub fn find_hsmusic_from_album_track<'a, 'b, 'c>(
+    album_name: &'a str,
+    track_num: usize,
     bandcamp_albums: &'b [bandcamp::Album],
     hsmusic_albums: &'c [hsmusic::Album<'c>],
 ) -> Result<(&'c hsmusic::Album<'c>, &'c hsmusic::Track<'c>)> {
-    if let Some(special) = special_hsmusic_from_id3(id3, hsmusic_albums)? {
+    if let Some(special) = special_hsmusic_from_album_track(album_name, track_num, hsmusic_albums) {
         Ok(special)
-    } else if let Some(bandcamp) = find_bandcamp_from_id3(id3, bandcamp_albums)? {
+    } else if let Some(bandcamp) =
+        find_bandcamp_from_album_track(album_name, track_num, bandcamp_albums)?
+    {
         let hsmusic = find_hsmusic_from_bandcamp(bandcamp, hsmusic_albums)?;
         Ok(hsmusic)
     } else {
-        let album_name = id3.album().context("missing album")?;
-        let track_num: usize = id3.track().context("missing track")?.try_into()?;
-
         let album = hsmusic_albums
             .iter()
             .find(|x| x.name == album_name)

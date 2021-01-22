@@ -1,15 +1,26 @@
-use ::id3::{frame::PictureType, Tag, Version};
-use anyhow::Result;
+use anyhow::{Context, Result};
+use ffmpeg_next::*;
 use locate::*;
 use std::fs::{create_dir_all, read_dir, read_to_string, File};
-use std::io::{prelude::*, BufReader, BufWriter, SeekFrom};
+use std::io::BufReader;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
 pub mod bandcamp;
 pub mod hsmusic;
-mod id3;
 pub mod locate;
+
+fn get_album<'a>(metadata: &'a DictionaryRef) -> Option<&'a str> {
+    metadata.get("album").or_else(|| metadata.get("ALBUM"))
+}
+
+fn get_track(metadata: &DictionaryRef) -> Result<Option<usize>> {
+    metadata
+        .get("track")
+        .or_else(|| metadata.get("TRACK"))
+        .map(|x| Ok(x.parse()?))
+        .transpose()
+}
 
 pub fn add_art(
     bandcamp_json: PathBuf,
@@ -19,6 +30,8 @@ pub fn add_art(
     out_dir: PathBuf,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<()> {
+    ffmpeg_next::init()?;
+
     let bandcamp_file = File::open(bandcamp_json)?;
     let bandcamp_reader = BufReader::new(bandcamp_file);
     let bandcamp_albums: Vec<bandcamp::Album> = serde_json::from_reader(bandcamp_reader)?;
@@ -60,42 +73,149 @@ pub fn add_art(
         let rel_path = in_path.strip_prefix(&in_dir)?;
         let out_path = out_dir.join(&rel_path);
 
-        println!("{:?} -> {:?}", in_path, out_path);
-
-        let file = File::open(in_path)?;
-        let mut reader = BufReader::new(file);
-        let mut header = [0; 3];
-        reader.read_exact(&mut header)?;
-        reader.seek(SeekFrom::Start(0))?;
-
         if let Some(parent) = out_path.parent() {
             create_dir_all(parent)?;
         }
 
-        let mut out_file = File::create(out_path)?;
+        println!("{:?} -> {:?}", in_path, out_path);
 
-        if &header == b"ID3" {
-            let mut writer = BufWriter::new(out_file);
+        if let Ok(mut ictx) = ffmpeg_next::format::input(&in_path) {
+            let file_metadata = ictx.metadata().to_owned();
 
-            let mut tag = Tag::read_from(&mut reader)?;
+            let supports_art = ictx.format().name() != "ogg";
 
-            let (album, track) = find_hsmusic_from_id3(&tag, &bandcamp_albums, &hsmusic_albums)?;
+            let mut octx = ffmpeg_next::format::output(&out_path)?;
 
-            if verbose {
-                println!("hsmusic ({:?}): {:?}", album.name, track.name);
+            let mut stream_mapping = vec![0; ictx.nb_streams() as _];
+            let mut ist_time_bases = vec![Rational(0, 1); ictx.nb_streams() as _];
+            let mut ost_index = 0;
+            let mut picture = None;
+            for (ist_index, ist) in ictx.streams().enumerate() {
+                let ist_medium = ist.codec().medium();
+                if ist_medium != media::Type::Audio && ist_medium != media::Type::Subtitle {
+                    stream_mapping[ist_index] = -1;
+                    continue;
+                }
+
+                stream_mapping[ist_index] = ost_index;
+                ist_time_bases[ist_index] = ist.time_base();
+                ost_index += 1;
+                let mut ost = octx.add_stream(encoder::find(codec::Id::None))?;
+                ost.set_parameters(ist.parameters());
+
+                if ist_medium == media::Type::Audio {
+                    let track_metadata = ist.metadata().to_owned();
+
+                    let album_track = if let (Some(album), Some(track)) =
+                        (get_album(&file_metadata), get_track(&file_metadata)?)
+                    {
+                        Some((album, track))
+                    } else if let (Some(album), Some(track)) =
+                        (get_album(&track_metadata), get_track(&track_metadata)?)
+                    {
+                        Some((album, track))
+                    } else {
+                        None
+                    };
+
+                    if let Some((album, track)) = album_track {
+                        let (album, track) = find_hsmusic_from_album_track(
+                            album,
+                            track,
+                            &bandcamp_albums,
+                            &hsmusic_albums,
+                        )?;
+
+                        if verbose {
+                            println!("hsmusic: {:?} - {:?}", album.name, track.name);
+                        }
+
+                        if supports_art {
+                            picture = Some(track.picture(&album, &hsmusic)?);
+                        }
+                    }
+
+                    ost.set_metadata(track_metadata);
+                }
+
+                // We need to set codec_tag to 0 lest we run into incompatible codec tag
+                // issues when muxing into a different container format. Unfortunately
+                // there's no high level API to do this (yet).
+                unsafe {
+                    (*ost.parameters().as_mut_ptr()).codec_tag = 0;
+                }
             }
 
-            tag.remove_picture_by_type(PictureType::CoverFront);
-            tag.add_picture(track.picture(&album, &hsmusic)?);
+            if supports_art {
+                let mut pctx =
+                    ffmpeg_next::format::input(&picture.context("couldn't find metadata")?)?;
+                let pst = pctx.streams().next().context("couldn't read art")?;
+                let mut opst = octx.add_stream(encoder::find(codec::Id::None))?;
+                opst.set_parameters(pst.parameters());
+                unsafe {
+                    (*opst.parameters().as_mut_ptr()).codec_tag = 0;
+                }
 
-            tag.write_to(&mut writer, Version::Id3v23)?; // write id3
-            std::io::copy(&mut reader, &mut writer)?; // write mp3
+                let mut picture_metadata = Dictionary::new();
+                picture_metadata.set("title", "cover");
+                picture_metadata.set("comment", "Cover (front)");
+                opst.set_metadata(picture_metadata);
+
+                unsafe {
+                    (*opst.as_mut_ptr()).disposition =
+                        format::stream::disposition::Disposition::ATTACHED_PIC.bits();
+                }
+
+                let pst_time_base = pst.time_base();
+
+                octx.set_metadata(file_metadata);
+                octx.write_header()?;
+
+                for (stream, mut packet) in ictx.packets() {
+                    let ist_index = stream.index();
+                    let ost_index = stream_mapping[ist_index];
+                    if ost_index < 0 {
+                        continue;
+                    }
+                    let ost = octx.stream(ost_index as _).unwrap();
+                    packet.rescale_ts(ist_time_bases[ist_index], ost.time_base());
+                    packet.set_position(-1);
+                    packet.set_stream(ost_index as _);
+                    packet.write_interleaved(&mut octx)?;
+                }
+
+                for (_, mut packet) in pctx.packets() {
+                    let ost = octx.stream(ost_index as _).unwrap();
+                    packet.rescale_ts(pst_time_base, ost.time_base());
+                    packet.set_position(-1);
+                    packet.set_stream(ost_index as _);
+                    packet.write_interleaved(&mut octx)?;
+                }
+            } else {
+                octx.set_metadata(file_metadata);
+                octx.write_header()?;
+
+                for (stream, mut packet) in ictx.packets() {
+                    let ist_index = stream.index();
+                    let ost_index = stream_mapping[ist_index];
+                    if ost_index < 0 {
+                        continue;
+                    }
+                    let ost = octx.stream(ost_index as _).unwrap();
+                    packet.rescale_ts(ist_time_bases[ist_index], ost.time_base());
+                    packet.set_position(-1);
+                    packet.set_stream(ost_index as _);
+                    packet.write_interleaved(&mut octx)?;
+                }
+            }
+
+            octx.write_trailer()?;
         } else {
             if verbose {
-                println!("not id3");
+                println!("not ffmpeg");
             }
 
-            std::io::copy(&mut reader, &mut out_file)?;
+            std::fs::copy(in_path, out_path)?;
         }
     }
 
