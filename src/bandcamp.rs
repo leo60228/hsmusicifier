@@ -64,7 +64,7 @@ pub fn album(url: &str) -> Result<Album> {
     let selector = Selector::parse("script[type='application/ld+json']").unwrap();
     let script = document
         .select(&selector)
-        .nth(0)
+        .next()
         .context("missing JSON-LD")?;
     let json = script.inner_html();
     let album_json: AlbumJson = serde_json::from_str(&json)?;

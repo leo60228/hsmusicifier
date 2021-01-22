@@ -51,7 +51,7 @@ fn spawn_thread(
     })));
 }
 
-fn run(ui: UI, win: Window) -> Result<()> {
+fn run(ui: UI, mut win: Window) -> Result<()> {
     let Opt {
         bandcamp_json,
         hsmusic,
@@ -118,7 +118,7 @@ fn run(ui: UI, win: Window) -> Result<()> {
     });
 
     input_chooser.append(&ui, input_entry.clone(), LayoutStrategy::Stretchy);
-    input_chooser.append(&ui, input_button.clone(), LayoutStrategy::Compact);
+    input_chooser.append(&ui, input_button, LayoutStrategy::Compact);
 
     let output_entry = Entry::new(&ui);
     let mut output_button = Button::new(&ui, "...");
@@ -138,14 +138,12 @@ fn run(ui: UI, win: Window) -> Result<()> {
     });
 
     output_chooser.append(&ui, output_entry.clone(), LayoutStrategy::Stretchy);
-    output_chooser.append(&ui, output_button.clone(), LayoutStrategy::Compact);
+    output_chooser.append(&ui, output_button, LayoutStrategy::Compact);
 
     next_button.on_clicked(&ui, {
         let ui = ui.clone();
         let mut win = win.clone();
         let thread = thread.clone();
-        let hsmusic = hsmusic.clone();
-        let bandcamp_json = bandcamp_json.clone();
         let add = add.clone();
         let progress = progress.clone();
         move |_| {
@@ -187,7 +185,7 @@ fn run(ui: UI, win: Window) -> Result<()> {
     select.set_padded(&ui, true);
 
     // ADD PAGE
-    let progress_bar = ProgressBar::indeterminate(&ui);
+    let mut progress_bar = ProgressBar::indeterminate(&ui);
 
     add.append(&ui, Label::new(&ui, "Adding..."), LayoutStrategy::Compact);
     add.append(&ui, progress_bar.clone(), LayoutStrategy::Compact);
@@ -232,9 +230,6 @@ fn run(ui: UI, win: Window) -> Result<()> {
     let mut eloop = ui.event_loop();
     eloop.on_tick(&ui, {
         let ui = ui.clone();
-        let mut win = win.clone();
-        let progress = progress.clone();
-        let mut progress_bar = progress_bar.clone();
         move || {
             let progress = progress.load(Ordering::SeqCst);
             if progress >= 0 {

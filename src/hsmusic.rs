@@ -72,14 +72,9 @@ fn get_basic_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<&'a str> {
 }
 
 fn get_list_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<Vec<&'a str>> {
-    let mut start_index = if let Some(i) = s
+    let mut start_index = s
         .lines()
-        .position(|line| line.starts_with(&format!("{}:", name)))
-    {
-        i
-    } else {
-        return None;
-    };
+        .position(|line| line.starts_with(&format!("{}:", name)))?;
 
     let end_index = if let Some(i) = s
         .lines()
@@ -113,7 +108,7 @@ fn get_list_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<Vec<&'a str>> {
 fn get_contribution_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<Vec<Contributor<'a>>> {
     let contributors = get_list_field(s, name)?;
 
-    const REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("^(.*?)( \\((.*)\\))?$").unwrap());
+    static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("^(.*?)( \\((.*)\\))?$").unwrap());
     let mapped: Vec<Contributor> = contributors
         .into_iter()
         .map(|contrib| {
@@ -138,15 +133,10 @@ fn get_contribution_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<Vec<Contr
     }
 }
 
-fn get_multiline_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<String> {
-    let mut start_index = if let Some(i) = s
+fn get_multiline_field(s: &str, name: &str) -> Option<String> {
+    let mut start_index = s
         .lines()
-        .position(|line| line.starts_with(&format!("{}:", name)))
-    {
-        i
-    } else {
-        return None;
-    };
+        .position(|line| line.starts_with(&format!("{}:", name)))?;
 
     let end_index = if let Some(i) = s
         .lines()
@@ -202,7 +192,7 @@ fn get_kebab_case(name: &str) -> String {
     s
 }
 
-const SPLIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("(?m)^-{8,}\n").unwrap());
+static SPLIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("(?m)^-{8,}\n").unwrap());
 
 pub fn parse_artist(string: &str) -> Result<Artist> {
     Ok(Artist {
@@ -219,7 +209,7 @@ pub fn parse_artists(string: &str) -> Result<Vec<Artist>> {
 
 fn get_duration_in_seconds(duration: &str) -> usize {
     if let Some(parts) = duration
-        .split(":")
+        .split(':')
         .map(|x| x.parse().ok())
         .collect::<Option<Vec<usize>>>()
     {
@@ -257,7 +247,7 @@ pub fn parse_track<'a>(
             .or_else(|| artists.clone())
             .context("missing Artists")?,
         cover_artists: match get_contribution_field(section, "Track Art") {
-            Some(cover_artists) if cover_artists.len() > 0 && cover_artists[0].who == "none" => {
+            Some(cover_artists) if cover_artists.is_empty() && cover_artists[0].who == "none" => {
                 None
             }
             Some(cover_artists) => Some(cover_artists),
@@ -299,7 +289,7 @@ pub fn parse_album(string: &str) -> Result<Album> {
     let mut group_color = color;
 
     for section in split {
-        if section.trim().len() == 0 {
+        if section.trim().is_empty() {
             continue;
         }
 

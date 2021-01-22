@@ -65,7 +65,7 @@ pub fn add_art(
         let file = File::open(in_path)?;
         let mut reader = BufReader::new(file);
         let mut header = [0; 3];
-        reader.read(&mut header)?;
+        reader.read_exact(&mut header)?;
         reader.seek(SeekFrom::Start(0))?;
 
         if let Some(parent) = out_path.parent() {
