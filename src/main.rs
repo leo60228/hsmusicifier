@@ -1,11 +1,16 @@
-use anyhow::Result;
-use hsmusicifier::{bandcamp, hsmusic, locate::*};
-use id3::{frame::PictureType, Tag};
-use std::fs::{create_dir_all, read_dir, read_to_string, File};
-use std::io::{prelude::*, BufReader, BufWriter, SeekFrom};
-use std::path::PathBuf;
+use anyhow::{ensure, Result};
+use iui::{controls::*, prelude::*};
+use nfd::Response;
+use std::cell::RefCell;
+use std::env::current_exe;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::sync::{
+    atomic::{AtomicI8, Ordering},
+    mpsc, Arc,
+};
+use std::thread::{self, JoinHandle};
 use structopt::StructOpt;
-use walkdir::WalkDir;
 
 #[derive(StructOpt)]
 #[structopt(
@@ -15,107 +20,252 @@ use walkdir::WalkDir;
 struct Opt {
     /// Location of dumped bandcamp json
     #[structopt(short, long = "bandcamp-json", parse(from_os_str))]
-    pub bandcamp_json: PathBuf,
+    pub bandcamp_json: Option<PathBuf>,
 
     /// Location of hsmusic
     #[structopt(short = "m", long, parse(from_os_str))]
-    pub hsmusic: PathBuf,
-
-    /// Verbosity
-    #[structopt(short, long)]
-    pub verbose: bool,
-
-    /// Input directory
-    #[structopt(parse(from_os_str))]
-    pub in_dir: PathBuf,
-
-    /// Output directory
-    #[structopt(parse(from_os_str))]
-    pub out_dir: PathBuf,
+    pub hsmusic: Option<PathBuf>,
 }
 
-fn main() -> Result<()> {
-    let opt = Opt::from_args();
+fn spawn_thread(
+    thread: &RefCell<Option<JoinHandle<()>>>,
+    bandcamp_json: PathBuf,
+    hsmusic: PathBuf,
+    input: PathBuf,
+    output: PathBuf,
+    progress: Arc<AtomicI8>,
+    tx: mpsc::Sender<Result<()>>,
+) {
+    thread.replace(Some(thread::spawn(move || {
+        tx.send(hsmusicifier::add_art(
+            bandcamp_json,
+            hsmusic,
+            true,
+            input,
+            output,
+            |done, total| {
+                progress.store((done * 100 / total) as i8, Ordering::SeqCst);
+            },
+        ))
+        .unwrap();
+    })));
+}
 
+fn run(ui: UI, win: Window) -> Result<()> {
     let Opt {
         bandcamp_json,
         hsmusic,
-        verbose,
-        in_dir,
-        out_dir,
-    } = opt;
+    } = Opt::from_args();
 
-    let bandcamp_file = File::open(bandcamp_json)?;
-    let bandcamp_reader = BufReader::new(bandcamp_file);
-    let bandcamp_albums: Vec<bandcamp::Album> = serde_json::from_reader(bandcamp_reader)?;
-
-    let hsmusic_albums_path = {
-        let mut p = hsmusic.clone();
-        p.push("data");
-        p.push("album");
-        p
+    let bandcamp_json = match bandcamp_json {
+        Some(x) => x,
+        None => current_exe()?.join("bandcamp.json"),
+    };
+    let hsmusic = match hsmusic {
+        Some(x) => x,
+        None => current_exe()?.join("hsmusic"),
     };
 
-    let hsmusic_album_texts: Vec<_> = read_dir(hsmusic_albums_path)?
-        .map(|ent| {
-            let ent = ent?;
-            Ok(read_to_string(ent.path())?)
-        })
-        .collect::<Result<_>>()?;
+    ensure!(bandcamp_json.is_file(), "Missing bandcamp.json!");
+    ensure!(hsmusic.is_dir(), "Missing hsmusic!");
 
-    let hsmusic_albums: Vec<_> = hsmusic_album_texts
-        .iter()
-        .map(|x| hsmusic::parse_album(x))
-        .collect::<Result<_>>()?;
+    let (tx, rx) = mpsc::channel();
+    let progress = Arc::new(AtomicI8::new(-1));
+    let thread = Rc::new(RefCell::new(None));
 
-    for entry in WalkDir::new(&in_dir) {
-        let entry = entry?;
-        if !entry.file_type().is_file() {
-            continue;
-        }
+    let mut select = VerticalBox::new(&ui);
+    let mut add = VerticalBox::new(&ui);
+    let finish = VerticalBox::new(&ui);
 
-        let in_path = entry.path();
-        let rel_path = in_path.strip_prefix(&in_dir)?;
-        let out_path = out_dir.join(&rel_path);
+    // MUSIC PAGE
 
-        println!("{:?} -> {:?}", in_path, out_path);
+    let mut next_button = Button::new(&ui, "Next");
 
-        let file = File::open(in_path)?;
-        let mut reader = BufReader::new(file);
-        let mut header = [0; 3];
-        reader.read(&mut header)?;
-        reader.seek(SeekFrom::Start(0))?;
+    let mut input_entry = Entry::new(&ui);
+    let mut input_button = Button::new(&ui, "...");
 
-        if let Some(parent) = out_path.parent() {
-            create_dir_all(parent)?;
-        }
+    let mut input_chooser = HorizontalBox::new(&ui);
 
-        let mut out_file = File::create(out_path)?;
+    input_chooser.set_padded(&ui, true);
 
-        if &header == b"ID3" {
-            let mut writer = BufWriter::new(out_file);
+    input_button.on_clicked(&ui, {
+        let ui = ui.clone();
+        let mut next_button = next_button.clone();
+        let mut input_entry = input_entry.clone();
+        move |_| {
+            if let Ok(Response::Okay(file)) = nfd::open_pick_folder(None) {
+                input_entry.set_value(&ui, &file);
 
-            let mut tag = Tag::read_from(&mut reader)?;
-
-            let (album, track) = find_hsmusic_from_id3(&tag, &bandcamp_albums, &hsmusic_albums)?;
-
-            if verbose {
-                println!("hsmusic ({:?}): {:?}", album.name, track.name);
+                if Path::new(&file).is_dir() {
+                    next_button.enable(&ui);
+                } else {
+                    next_button.disable(&ui);
+                }
             }
-
-            tag.remove_picture_by_type(PictureType::CoverFront);
-            tag.add_picture(track.picture(&album, &hsmusic)?);
-
-            tag.write_to(&mut writer, id3::Version::Id3v23)?; // write id3
-            std::io::copy(&mut reader, &mut writer)?; // write mp3
-        } else {
-            if verbose {
-                println!("not id3");
-            }
-
-            std::io::copy(&mut reader, &mut out_file)?;
         }
+    });
+
+    input_entry.on_changed(&ui, {
+        let ui = ui.clone();
+        let mut next_button = next_button.clone();
+        move |path| {
+            if Path::new(&path).is_dir() {
+                next_button.enable(&ui);
+            } else {
+                next_button.disable(&ui);
+            }
+        }
+    });
+
+    input_chooser.append(&ui, input_entry.clone(), LayoutStrategy::Stretchy);
+    input_chooser.append(&ui, input_button.clone(), LayoutStrategy::Compact);
+
+    let output_entry = Entry::new(&ui);
+    let mut output_button = Button::new(&ui, "...");
+
+    let mut output_chooser = HorizontalBox::new(&ui);
+
+    output_chooser.set_padded(&ui, true);
+
+    output_button.on_clicked(&ui, {
+        let ui = ui.clone();
+        let mut output_entry = output_entry.clone();
+        move |_| {
+            if let Ok(Response::Okay(file)) = nfd::open_pick_folder(None) {
+                output_entry.set_value(&ui, &file);
+            }
+        }
+    });
+
+    output_chooser.append(&ui, output_entry.clone(), LayoutStrategy::Stretchy);
+    output_chooser.append(&ui, output_button.clone(), LayoutStrategy::Compact);
+
+    next_button.on_clicked(&ui, {
+        let ui = ui.clone();
+        let mut win = win.clone();
+        let thread = thread.clone();
+        let hsmusic = hsmusic.clone();
+        let bandcamp_json = bandcamp_json.clone();
+        let add = add.clone();
+        let progress = progress.clone();
+        move |_| {
+            let input_path = PathBuf::from(&input_entry.value(&ui));
+            let output_path = PathBuf::from(&output_entry.value(&ui));
+
+            win.set_child(&ui, add.clone());
+
+            let progress = progress.clone();
+
+            spawn_thread(
+                &thread,
+                bandcamp_json.clone(),
+                hsmusic.clone(),
+                input_path,
+                output_path,
+                progress,
+                tx.clone(),
+            );
+        }
+    });
+
+    select.append(
+        &ui,
+        Label::new(&ui, "Select input location:"),
+        LayoutStrategy::Compact,
+    );
+    select.append(&ui, input_chooser, LayoutStrategy::Compact);
+    select.append(&ui, HorizontalSeparator::new(&ui), LayoutStrategy::Compact);
+    select.append(
+        &ui,
+        Label::new(&ui, "Select output location:"),
+        LayoutStrategy::Compact,
+    );
+    select.append(&ui, output_chooser, LayoutStrategy::Compact);
+    select.append(&ui, Spacer::new(&ui), LayoutStrategy::Stretchy);
+    select.append(&ui, next_button, LayoutStrategy::Compact);
+
+    select.set_padded(&ui, true);
+
+    // ADD PAGE
+    let progress_bar = ProgressBar::indeterminate(&ui);
+
+    add.append(&ui, Label::new(&ui, "Adding..."), LayoutStrategy::Compact);
+    add.append(&ui, progress_bar.clone(), LayoutStrategy::Compact);
+    add.set_padded(&ui, true);
+
+    // FINISH PAGE
+    {
+        let mut finish = finish.clone();
+        let mut exit = Button::new(&ui, "Exit");
+        exit.on_clicked(&ui, {
+            let ui = ui.clone();
+            move |_| {
+                ui.quit();
+            }
+        });
+
+        let mut label_holder = HorizontalBox::new(&ui);
+        label_holder.append(&ui, Spacer::new(&ui), LayoutStrategy::Stretchy);
+        label_holder.append(
+            &ui,
+            Label::new(&ui, "Cover art has been added!"),
+            LayoutStrategy::Compact,
+        );
+        label_holder.append(&ui, Spacer::new(&ui), LayoutStrategy::Stretchy);
+
+        finish.append(&ui, Spacer::new(&ui), LayoutStrategy::Stretchy);
+        finish.append(&ui, label_holder, LayoutStrategy::Compact);
+        finish.append(&ui, Spacer::new(&ui), LayoutStrategy::Stretchy);
+        finish.append(&ui, exit, LayoutStrategy::Compact);
+
+        finish.set_padded(&ui, true);
     }
 
+    // DISPLAY WINDOW
+    {
+        let mut win = win.clone();
+        win.set_child(&ui, select);
+        win.show(&ui);
+    }
+
+    // EVENT LOOP
+    let mut eloop = ui.event_loop();
+    eloop.on_tick(&ui, {
+        let ui = ui.clone();
+        let mut win = win.clone();
+        let progress = progress.clone();
+        let mut progress_bar = progress_bar.clone();
+        move || {
+            let progress = progress.load(Ordering::SeqCst);
+            if progress >= 0 {
+                progress_bar.set_value(&ui, progress as u32);
+            }
+
+            match rx.try_recv() {
+                Ok(Ok(())) => {
+                    thread.borrow_mut().take().unwrap().join().unwrap();
+                    win.set_child(&ui, finish.clone());
+                }
+                Ok(Err(err)) => {
+                    win.modal_err(&ui, "Error", &err.to_string());
+                    panic!("{:?}", err);
+                }
+                Err(_) => {}
+            }
+        }
+    });
+    eloop.run_delay(&ui, 200);
+
     Ok(())
+}
+
+fn main() {
+    let ui = UI::init().unwrap();
+
+    let win = Window::new(&ui, "hsmusicifier", 200, 300, WindowType::NoMenubar);
+
+    if let Err(err) = run(ui.clone(), win.clone()) {
+        win.modal_err(&ui, "Error", &err.to_string());
+        panic!("{:?}", err);
+    }
 }
