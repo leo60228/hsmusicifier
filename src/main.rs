@@ -1,4 +1,4 @@
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use iui::{controls::*, prelude::*};
 use nfd::Response;
 use std::cell::RefCell;
@@ -59,11 +59,14 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
 
     let bandcamp_json = match bandcamp_json {
         Some(x) => x,
-        None => current_exe()?.join("bandcamp.json"),
+        None => current_exe()?
+            .parent()
+            .context("Bad $0!")?
+            .join("bandcamp.json"),
     };
     let hsmusic = match hsmusic {
         Some(x) => x,
-        None => current_exe()?.join("hsmusic"),
+        None => current_exe()?.parent().context("Bad $0!")?.join("hsmusic"),
     };
 
     ensure!(bandcamp_json.is_file(), "Missing bandcamp.json!");
