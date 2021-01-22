@@ -247,7 +247,7 @@ pub fn parse_track<'a>(
             .or_else(|| artists.clone())
             .context("missing Artists")?,
         cover_artists: match get_contribution_field(section, "Track Art") {
-            Some(cover_artists) if cover_artists.is_empty() && cover_artists[0].who == "none" => {
+            Some(cover_artists) if !cover_artists.is_empty() && cover_artists[0].who == "none" => {
                 None
             }
             Some(cover_artists) => Some(cover_artists),
