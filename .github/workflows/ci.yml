@@ -68,7 +68,6 @@ jobs:
           args: --all --release
         env:
           LIBCLANG_PATH: ${{ runner.temp }}/llvm/bin
-          FFMPEG_DIR: ${{ runner.temp }}/ffmpeg-N-100732-g07a18ff477-win64-gpl-shared
       - uses: actions/upload-artifact@v2
         with:
           name: windows-bin
