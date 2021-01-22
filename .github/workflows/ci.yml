@@ -34,7 +34,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all --release
+          args: --all --release -Z features=itarget
       - uses: actions/upload-artifact@v2
         with:
           name: linux-bin
@@ -71,7 +71,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all --release
+          args: --all --release -Z features=itarget
         env:
           LIBCLANG_PATH: ${{ runner.temp }}/llvm/bin
       - uses: actions/upload-artifact@v2
@@ -111,4 +111,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -D warnings
+          args: -Z features=itarget -- -D warnings
