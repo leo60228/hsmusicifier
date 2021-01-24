@@ -58,7 +58,7 @@ fn special_hsmusic_from_album_track<'a, 'b>(
 fn bandcamp_to_hsmusic_name(album: &str) -> &str {
     match album {
         "Homestuck - Strife!" => "Strife!",
-        other => other,
+        other => other.trim_end_matches(" [UNOFFICIAL ALBUM]"),
     }
 }
 
