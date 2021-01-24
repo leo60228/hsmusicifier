@@ -55,6 +55,13 @@ fn special_hsmusic_from_album_track<'a, 'b>(
     }
 }
 
+fn bandcamp_to_hsmusic_name(album: &str) -> &str {
+    match album {
+        "Homestuck - Strife!" => "Strife!",
+        other => other,
+    }
+}
+
 pub fn find_hsmusic_from_album_track<'a, 'b, 'c>(
     album_name: &'a str,
     track_num: usize,
@@ -71,7 +78,7 @@ pub fn find_hsmusic_from_album_track<'a, 'b, 'c>(
     } else {
         let album = hsmusic_albums
             .iter()
-            .find(|x| x.name == album_name)
+            .find(|x| x.name == bandcamp_to_hsmusic_name(album_name))
             .context("couldn't find album")?;
         let track = &album.tracks[track_num - 1];
         Ok((album, track))
