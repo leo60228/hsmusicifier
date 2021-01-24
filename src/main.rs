@@ -7,7 +7,7 @@ use std::env::current_exe;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{
-    atomic::{AtomicI8, Ordering},
+    atomic::{AtomicIsize, AtomicUsize, Ordering},
     mpsc, Arc,
 };
 use std::thread;
@@ -59,7 +59,8 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
     ensure!(hsmusic.is_dir(), "Missing hsmusic!");
 
     let (tx, rx) = mpsc::channel();
-    let progress = Arc::new(AtomicI8::new(-1));
+    let progress = Arc::new(AtomicIsize::new(-1));
+    let progress_total = Arc::new(AtomicUsize::new(0));
     let thread = Rc::new(RefCell::new(None));
 
     let mut select = VerticalBox::new(&ui);
@@ -219,6 +220,7 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
         let thread = thread.clone();
         let add = add.clone();
         let progress = progress.clone();
+        let progress_total = progress_total.clone();
         let add_artists = add_artists.clone();
         let add_album = add_album.clone();
         let add_art = add_art.clone();
@@ -231,6 +233,7 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
             win.set_child(&ui, add.clone());
 
             let progress = progress.clone();
+            let progress_total = progress_total.clone();
 
             let edits = Edits {
                 add_artists: add_artists.checked(&ui),
@@ -265,8 +268,9 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
                         true,
                         input_path,
                         output_path,
-                        |done, total| {
-                            progress.store((done * 100 / total) as i8, Ordering::SeqCst);
+                        |total| {
+                            progress_total.store(total, Ordering::SeqCst);
+                            progress.fetch_add(1, Ordering::SeqCst);
                         },
                     )
                 }) {
@@ -362,8 +366,9 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
         let ui = ui.clone();
         move || {
             let progress = progress.load(Ordering::SeqCst);
+            let progress_total = progress_total.load(Ordering::SeqCst);
             if progress >= 0 {
-                progress_bar.set_value(&ui, progress as u32);
+                progress_bar.set_value(&ui, (progress as usize * 100 / progress_total) as u32);
             }
 
             match rx.try_recv() {

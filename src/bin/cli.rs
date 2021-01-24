@@ -86,7 +86,7 @@ fn main() -> Result<()> {
         verbose,
         in_dir,
         out_dir,
-        |_, _| (),
+        drop,
     )?;
 
     Ok(())

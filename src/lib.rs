@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Error, Result};
 use ffmpeg_next::*;
 use locate::*;
+use rayon::prelude::*;
 use std::fs::{create_dir_all, read_dir, read_to_string, File};
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -66,7 +67,7 @@ pub fn add_art(
     verbose: bool,
     in_dir: PathBuf,
     out_dir: PathBuf,
-    mut progress: impl FnMut(usize, usize),
+    progress: impl Fn(usize) + Send + Sync,
 ) -> Result<()> {
     ffmpeg_next::init()?;
 
@@ -104,8 +105,8 @@ pub fn add_art(
         })
         .collect::<std::result::Result<_, _>>()?;
     let entries_count = entries.len();
-    for (i, entry) in entries.into_iter().enumerate() {
-        progress(i, entries_count);
+    entries.into_par_iter().try_for_each(|entry| {
+        progress(entries_count);
 
         let in_path = entry.path();
         let rel_path = in_path.strip_prefix(&in_dir)?;
@@ -127,7 +128,7 @@ pub fn add_art(
                     println!("not audio");
                 }
                 std::fs::copy(in_path, out_path)?;
-                continue;
+                return Ok(());
             }
 
             let mut file_metadata = ictx.metadata().to_owned();
@@ -304,7 +305,7 @@ pub fn add_art(
 
             std::fs::copy(in_path, out_path)?;
         }
-    }
 
-    Ok(())
+        Ok(())
+    })
 }
