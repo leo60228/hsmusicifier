@@ -1,5 +1,5 @@
 use crate::{bandcamp, hsmusic};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 
 pub fn find_bandcamp_from_album_track<'a, 'b>(
     album_name: &'a str,
@@ -79,7 +79,13 @@ pub fn find_hsmusic_from_album_track<'a, 'b, 'c>(
         let album = hsmusic_albums
             .iter()
             .find(|x| x.name == bandcamp_to_hsmusic_name(album_name))
-            .context("couldn't find album")?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "couldn't find album {:?} in known albums {:?}",
+                    album_name,
+                    hsmusic_albums.iter().map(|x| x.name).collect::<Vec<_>>()
+                )
+            })?;
         let track = &album.tracks[track_num - 1];
         Ok((album, track))
     }
