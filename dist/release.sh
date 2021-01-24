@@ -31,6 +31,8 @@ cp -r "$hsmusic/media/album-art" media/
 mkdir data
 cp -r "$hsmusic/data/album" data/
 popd
+
+zip -r ../hsmusicifier-data.zip *
 popd
 
 mkdir hsmusicifier-win
