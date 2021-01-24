@@ -39,6 +39,7 @@ pub struct Track<'a> {
     pub urls: Vec<&'a str>,
     pub group: &'a str,
     pub color: &'a str,
+    pub track_num: usize,
 }
 
 impl Track<'_> {
@@ -253,6 +254,7 @@ pub fn parse_track<'a>(
     track_art_date: &'a str,
     artists: &Option<Vec<Contributor<'a>>>,
     color: &'a str,
+    track_num: usize,
 ) -> Result<Track<'a>> {
     let name = get_basic_field(section, "Track").context("missing Track")?;
     let original_date = get_basic_field(section, "Original Date");
@@ -289,6 +291,7 @@ pub fn parse_track<'a>(
         } else {
             color
         },
+        track_num,
     })
 }
 
@@ -309,6 +312,7 @@ pub fn parse_album(string: &str) -> Result<Album> {
     let mut uses_groups = false;
     let mut group = "";
     let mut group_color = color;
+    let mut track_num = 1;
 
     for section in split {
         if section.trim().is_empty() {
@@ -327,7 +331,9 @@ pub fn parse_album(string: &str) -> Result<Album> {
                 track_art_date,
                 &artists,
                 color,
+                track_num,
             )?);
+            track_num += 1;
         }
     }
 

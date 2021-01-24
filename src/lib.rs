@@ -39,17 +39,23 @@ pub struct ArtTypes {
 pub struct Edits {
     pub add_artists: bool,
     pub add_art: Option<ArtTypes>,
+    pub add_album: bool,
 }
 
-fn get_album<'a>(metadata: &'a DictionaryRef) -> Option<&'a str> {
-    metadata.get("album").or_else(|| metadata.get("ALBUM"))
+fn get_album(metadata: &DictionaryRef) -> Option<(&'static str, String)> {
+    metadata
+        .get("album")
+        .map(|x| ("album", x))
+        .or_else(|| metadata.get("ALBUM").map(|x| ("ALBUM", x)))
+        .map(|(k, v)| (k, v.to_string()))
 }
 
-fn get_track(metadata: &DictionaryRef) -> Result<Option<usize>> {
+fn get_track(metadata: &DictionaryRef) -> Result<Option<(&'static str, usize)>> {
     metadata
         .get("track")
-        .or_else(|| metadata.get("TRACK"))
-        .map(|x| Ok(x.parse()?))
+        .map(|x| ("track", x))
+        .or_else(|| metadata.get("TRACK").map(|x| ("TRACK", x)))
+        .map(|(k, v)| Ok((k, v.parse()?)))
         .transpose()
 }
 
@@ -156,18 +162,20 @@ pub fn add_art(
                     let album_track = if let (Some(album), Some(track)) =
                         (get_album(&file_metadata), get_track(&file_metadata)?)
                     {
-                        Some((album, track))
+                        Some((album, track, &mut file_metadata))
                     } else if let (Some(album), Some(track)) =
                         (get_album(&track_metadata), get_track(&track_metadata)?)
                     {
-                        Some((album, track))
+                        Some((album, track, &mut track_metadata))
                     } else {
                         None
                     };
 
-                    if let Some((album_name, track_num)) = album_track {
+                    if let Some(((album_key, album_name), (track_key, track_num), metadata_dict)) =
+                        album_track
+                    {
                         let (album, track) = find_hsmusic_from_album_track(
-                            album_name,
+                            &album_name,
                             track_num,
                             &bandcamp_albums,
                             &hsmusic_albums,
@@ -179,28 +187,22 @@ pub fn add_art(
 
                         if add_art {
                             if let Some(ArtTypes { first, rest }) = edits.add_art {
+                                let track_num = if edits.add_album {
+                                    track.track_num
+                                } else {
+                                    track_num
+                                };
                                 let art = if track_num <= 1 { first } else { rest };
                                 picture = Some(track.picture(&album, &hsmusic, art)?);
                             }
                         }
 
                         if edits.add_artists {
-                            let (artist_dict, artist_name) =
-                                if track_metadata.get("artist").is_some() {
-                                    (&mut track_metadata, "artist")
-                                } else if track_metadata.get("ARTIST").is_some() {
-                                    (&mut track_metadata, "ARTIST")
-                                } else if file_metadata.get("artist").is_some() {
-                                    (&mut file_metadata, "artist")
-                                } else if file_metadata.get("ARTIST").is_some() {
-                                    (&mut file_metadata, "ARTIST")
-                                } else if track_metadata.get("track").is_some()
-                                    || track_metadata.get("TRACK").is_some()
-                                {
-                                    (&mut track_metadata, "artist")
-                                } else {
-                                    (&mut file_metadata, "artist")
-                                };
+                            let artist_key = if metadata_dict.get("ARTIST").is_some() {
+                                "ARTIST"
+                            } else {
+                                "artist"
+                            };
 
                             if let Some(artists) = &track.artists {
                                 let artists =
@@ -210,8 +212,13 @@ pub fn add_art(
                                     println!("artists: {}", artists);
                                 }
 
-                                artist_dict.set(artist_name, &artists);
+                                metadata_dict.set(artist_key, &artists);
                             }
+                        }
+
+                        if edits.add_album {
+                            metadata_dict.set(album_key, &album.name);
+                            metadata_dict.set(track_key, &track.track_num.to_string());
                         }
                     }
                 }

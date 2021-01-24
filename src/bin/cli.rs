@@ -44,6 +44,10 @@ struct Opt {
     /// Don't add artists
     #[structopt(long)]
     pub no_artists: bool,
+
+    /// Add album
+    #[structopt(long)]
+    pub album: bool,
 }
 
 fn main() -> Result<()> {
@@ -59,6 +63,7 @@ fn main() -> Result<()> {
         first_art,
         rest_art,
         no_artists,
+        album,
     } = opt;
 
     let edits = Edits {
@@ -71,6 +76,7 @@ fn main() -> Result<()> {
             })
         },
         add_artists: !no_artists,
+        add_album: album,
     };
 
     add_art(

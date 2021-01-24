@@ -132,6 +132,9 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
     let mut add_artists = Checkbox::new(&ui, "Add artists");
     add_artists.set_checked(&ui, true);
 
+    let mut add_album = Checkbox::new(&ui, "Add album");
+    add_album.set_checked(&ui, false);
+
     let mut add_art = Checkbox::new(&ui, "Add art");
     add_art.set_checked(&ui, true);
 
@@ -217,6 +220,7 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
         let add = add.clone();
         let progress = progress.clone();
         let add_artists = add_artists.clone();
+        let add_album = add_album.clone();
         let add_art = add_art.clone();
         let first_art = first_art;
         let rest_art = rest_art;
@@ -246,6 +250,7 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
                 } else {
                     None
                 },
+                add_album: add_album.checked(&ui),
             };
 
             let hsmusic = hsmusic.clone();
@@ -300,6 +305,7 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
     select.append(&ui, output_chooser, LayoutStrategy::Compact);
     select.append(&ui, HorizontalSeparator::new(&ui), LayoutStrategy::Compact);
     select.append(&ui, add_artists, LayoutStrategy::Compact);
+    select.append(&ui, add_album, LayoutStrategy::Compact);
     select.append(&ui, add_art, LayoutStrategy::Compact);
     select.append(&ui, first_art_chooser, LayoutStrategy::Compact);
     select.append(&ui, rest_art_chooser, LayoutStrategy::Compact);
@@ -330,7 +336,7 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
         label_holder.append(&ui, Spacer::new(&ui), LayoutStrategy::Stretchy);
         label_holder.append(
             &ui,
-            Label::new(&ui, "Cover art has been added!"),
+            Label::new(&ui, "Metadata has been added!"),
             LayoutStrategy::Compact,
         );
         label_holder.append(&ui, Spacer::new(&ui), LayoutStrategy::Stretchy);
