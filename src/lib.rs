@@ -80,6 +80,17 @@ pub fn add_art(
         println!("{:?} -> {:?}", in_path, out_path);
 
         if let Ok(mut ictx) = ffmpeg_next::format::input(&in_path) {
+            if !ictx
+                .streams()
+                .any(|x| x.codec().medium() == media::Type::Audio)
+            {
+                if verbose {
+                    println!("not audio");
+                }
+                std::fs::copy(in_path, out_path)?;
+                continue;
+            }
+
             let file_metadata = ictx.metadata().to_owned();
 
             let supports_art = ictx.format().name() != "ogg";
