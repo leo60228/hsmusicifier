@@ -1,14 +1,45 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use ffmpeg_next::*;
 use locate::*;
 use std::fs::{create_dir_all, read_dir, read_to_string, File};
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::str::FromStr;
 use walkdir::WalkDir;
 
 pub mod bandcamp;
 pub mod hsmusic;
 pub mod locate;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ArtType {
+    AlbumArt,
+    TrackArt,
+}
+
+impl FromStr for ArtType {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "album" | "album-art" => Ok(Self::AlbumArt),
+            "track" | "track-art" => Ok(Self::TrackArt),
+            _ => Err(anyhow!("Bad art type {}!", s)),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ArtTypes {
+    pub first: ArtType,
+    pub rest: ArtType,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Edits {
+    pub add_artists: bool,
+    pub add_art: Option<ArtTypes>,
+}
 
 fn get_album<'a>(metadata: &'a DictionaryRef) -> Option<&'a str> {
     metadata.get("album").or_else(|| metadata.get("ALBUM"))
@@ -25,6 +56,7 @@ fn get_track(metadata: &DictionaryRef) -> Result<Option<usize>> {
 pub fn add_art(
     bandcamp_json: PathBuf,
     hsmusic: PathBuf,
+    edits: Edits,
     verbose: bool,
     in_dir: PathBuf,
     out_dir: PathBuf,
@@ -94,7 +126,7 @@ pub fn add_art(
 
             let mut file_metadata = ictx.metadata().to_owned();
 
-            let supports_art = ictx.format().name() != "ogg";
+            let add_art = edits.add_art.is_some() && ictx.format().name() != "ogg";
 
             let mut octx = ffmpeg_next::format::output(&out_path)?;
 
@@ -104,7 +136,10 @@ pub fn add_art(
             let mut picture = None;
             for (ist_index, ist) in ictx.streams().enumerate() {
                 let ist_medium = ist.codec().medium();
-                if ist_medium != media::Type::Audio && ist_medium != media::Type::Subtitle {
+                if ist_medium != media::Type::Audio
+                    && ist_medium != media::Type::Subtitle
+                    && add_art
+                {
                     stream_mapping[ist_index] = -1;
                     continue;
                 }
@@ -115,9 +150,9 @@ pub fn add_art(
                 let mut ost = octx.add_stream(encoder::find(codec::Id::None))?;
                 ost.set_parameters(ist.parameters());
 
-                if ist_medium == media::Type::Audio {
-                    let mut track_metadata = ist.metadata().to_owned();
+                let mut track_metadata = ist.metadata().to_owned();
 
+                if ist_medium == media::Type::Audio {
                     let album_track = if let (Some(album), Some(track)) =
                         (get_album(&file_metadata), get_track(&file_metadata)?)
                     {
@@ -130,10 +165,10 @@ pub fn add_art(
                         None
                     };
 
-                    if let Some((album, track)) = album_track {
+                    if let Some((album_name, track_num)) = album_track {
                         let (album, track) = find_hsmusic_from_album_track(
-                            album,
-                            track,
+                            album_name,
+                            track_num,
                             &bandcamp_albums,
                             &hsmusic_albums,
                         )?;
@@ -142,40 +177,46 @@ pub fn add_art(
                             println!("hsmusic: {:?} - {:?}", album.name, track.name);
                         }
 
-                        if supports_art {
-                            picture = Some(track.picture(&album, &hsmusic)?);
+                        if add_art {
+                            if let Some(ArtTypes { first, rest }) = edits.add_art {
+                                let art = if track_num <= 1 { first } else { rest };
+                                picture = Some(track.picture(&album, &hsmusic, art)?);
+                            }
                         }
 
-                        let (artist_dict, artist_name) = if track_metadata.get("artist").is_some() {
-                            (&mut track_metadata, "artist")
-                        } else if track_metadata.get("ARTIST").is_some() {
-                            (&mut track_metadata, "ARTIST")
-                        } else if file_metadata.get("artist").is_some() {
-                            (&mut file_metadata, "artist")
-                        } else if file_metadata.get("ARTIST").is_some() {
-                            (&mut file_metadata, "ARTIST")
-                        } else if track_metadata.get("track").is_some()
-                            || track_metadata.get("TRACK").is_some()
-                        {
-                            (&mut track_metadata, "artist")
-                        } else {
-                            (&mut file_metadata, "artist")
-                        };
+                        if edits.add_artists {
+                            let (artist_dict, artist_name) =
+                                if track_metadata.get("artist").is_some() {
+                                    (&mut track_metadata, "artist")
+                                } else if track_metadata.get("ARTIST").is_some() {
+                                    (&mut track_metadata, "ARTIST")
+                                } else if file_metadata.get("artist").is_some() {
+                                    (&mut file_metadata, "artist")
+                                } else if file_metadata.get("ARTIST").is_some() {
+                                    (&mut file_metadata, "ARTIST")
+                                } else if track_metadata.get("track").is_some()
+                                    || track_metadata.get("TRACK").is_some()
+                                {
+                                    (&mut track_metadata, "artist")
+                                } else {
+                                    (&mut file_metadata, "artist")
+                                };
 
-                        if let Some(artists) = &track.artists {
-                            let artists =
-                                artists.iter().map(|x| x.who).collect::<Vec<_>>().join(", ");
+                            if let Some(artists) = &track.artists {
+                                let artists =
+                                    artists.iter().map(|x| x.who).collect::<Vec<_>>().join(", ");
 
-                            if verbose {
-                                println!("artists: {}", artists);
+                                if verbose {
+                                    println!("artists: {}", artists);
+                                }
+
+                                artist_dict.set(artist_name, &artists);
                             }
-
-                            artist_dict.set(artist_name, &artists);
                         }
                     }
-
-                    ost.set_metadata(track_metadata);
                 }
+
+                ost.set_metadata(track_metadata);
 
                 // We need to set codec_tag to 0 lest we run into incompatible codec tag
                 // issues when muxing into a different container format. Unfortunately
@@ -185,7 +226,7 @@ pub fn add_art(
                 }
             }
 
-            if supports_art {
+            if add_art {
                 let mut pctx =
                     ffmpeg_next::format::input(&picture.context("couldn't find metadata")?)?;
                 let pst = pctx.streams().next().context("couldn't read art")?;

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use hsmusicifier::add_art;
+use hsmusicifier::{add_art, ArtType, ArtTypes, Edits};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -28,6 +28,22 @@ struct Opt {
     /// Output directory
     #[structopt(parse(from_os_str))]
     pub out_dir: PathBuf,
+
+    /// Don't add art
+    #[structopt(long)]
+    pub no_art: bool,
+
+    /// Use album or track art for first song in album
+    #[structopt(long, default_value = "album", conflicts_with = "no_art")]
+    pub first_art: ArtType,
+
+    /// Use album or track art for remaining songs in album
+    #[structopt(long, default_value = "track", conflicts_with = "no_art")]
+    pub rest_art: ArtType,
+
+    /// Don't add artists
+    #[structopt(long)]
+    pub no_artists: bool,
 }
 
 fn main() -> Result<()> {
@@ -39,9 +55,33 @@ fn main() -> Result<()> {
         verbose,
         in_dir,
         out_dir,
+        no_art,
+        first_art,
+        rest_art,
+        no_artists,
     } = opt;
 
-    add_art(bandcamp_json, hsmusic, verbose, in_dir, out_dir, |_, _| ())?;
+    let edits = Edits {
+        add_art: if no_art {
+            None
+        } else {
+            Some(ArtTypes {
+                first: first_art,
+                rest: rest_art,
+            })
+        },
+        add_artists: !no_artists,
+    };
+
+    add_art(
+        bandcamp_json,
+        hsmusic,
+        edits,
+        verbose,
+        in_dir,
+        out_dir,
+        |_, _| (),
+    )?;
 
     Ok(())
 }

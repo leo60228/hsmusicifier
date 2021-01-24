@@ -1,4 +1,5 @@
 //! ported basically verbatim from original JS
+use super::ArtType;
 use anyhow::{ensure, Context, Result};
 use either::{Left, Right};
 use once_cell::sync::Lazy;
@@ -41,12 +42,15 @@ pub struct Track<'a> {
 }
 
 impl Track<'_> {
-    pub fn picture(&self, album: &Album, path: impl AsRef<Path>) -> Result<PathBuf> {
+    pub fn picture(&self, album: &Album, path: impl AsRef<Path>, art: ArtType) -> Result<PathBuf> {
         let mut path: PathBuf = path.as_ref().into();
         path.push("media");
         path.push("album-art");
         path.push(&*album.directory);
-        path.push(&*self.directory);
+        path.push(match art {
+            ArtType::TrackArt => &*self.directory,
+            ArtType::AlbumArt => "cover",
+        });
         path.set_extension("jpg");
 
         if !path.is_file() {

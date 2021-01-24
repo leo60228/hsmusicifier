@@ -1,4 +1,5 @@
 use anyhow::{anyhow, ensure, Context, Result};
+use hsmusicifier::{ArtType, ArtTypes, Edits};
 use iui::{controls::*, prelude::*};
 use nfd::Response;
 use std::cell::RefCell;
@@ -9,7 +10,7 @@ use std::sync::{
     atomic::{AtomicI8, Ordering},
     mpsc, Arc,
 };
-use std::thread::{self, JoinHandle};
+use std::thread;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -25,47 +26,6 @@ struct Opt {
     /// Location of hsmusic
     #[structopt(short = "m", long, parse(from_os_str))]
     pub hsmusic: Option<PathBuf>,
-}
-
-fn spawn_thread(
-    thread: &RefCell<Option<JoinHandle<()>>>,
-    bandcamp_json: PathBuf,
-    hsmusic: PathBuf,
-    input: PathBuf,
-    output: PathBuf,
-    progress: Arc<AtomicI8>,
-    tx: mpsc::Sender<Result<()>>,
-) {
-    thread.replace(Some(thread::spawn(
-        move || match std::panic::catch_unwind(|| {
-            hsmusicifier::add_art(
-                bandcamp_json,
-                hsmusic,
-                true,
-                input,
-                output,
-                |done, total| {
-                    progress.store((done * 100 / total) as i8, Ordering::SeqCst);
-                },
-            )
-        }) {
-            Ok(Ok(())) => tx.send(Ok(())).unwrap(),
-            Ok(Err(err)) => tx.send(Err(err)).unwrap(),
-            Err(panic) => {
-                let msg = match panic.downcast_ref::<&'static str>() {
-                    Some(s) => *s,
-                    None => match panic.downcast_ref::<String>() {
-                        Some(s) => &s[..],
-                        None => "Box<Any>",
-                    },
-                };
-
-                tx.send(Err(anyhow!("panicked at '{}'", msg))).unwrap();
-
-                std::panic::resume_unwind(panic);
-            }
-        },
-    )));
 }
 
 fn find_file(specified: Option<PathBuf>, name: &str) -> Result<PathBuf> {
@@ -169,12 +129,97 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
     output_chooser.append(&ui, output_entry.clone(), LayoutStrategy::Stretchy);
     output_chooser.append(&ui, output_button, LayoutStrategy::Compact);
 
+    let mut add_artists = Checkbox::new(&ui, "Add artists");
+    add_artists.set_checked(&ui, true);
+
+    let mut add_art = Checkbox::new(&ui, "Add art");
+    add_art.set_checked(&ui, true);
+
+    let mut first_art = Combobox::new(&ui);
+    first_art.append(&ui, "Album Art");
+    first_art.append(&ui, "Track Art");
+    first_art.set_selected(&ui, 0);
+
+    let mut rest_art = Combobox::new(&ui);
+    rest_art.append(&ui, "Album Art");
+    rest_art.append(&ui, "Track Art");
+    rest_art.set_selected(&ui, 1);
+
+    let mut first_art_chooser = LayoutGrid::new(&ui);
+    first_art_chooser.append(
+        &ui,
+        Label::new(&ui, "First song:"),
+        0,
+        1,
+        1,
+        1,
+        GridExpand::Neither,
+        GridAlignment::Start,
+        GridAlignment::Center,
+    );
+    first_art_chooser.append(
+        &ui,
+        first_art.clone(),
+        1,
+        1,
+        1,
+        1,
+        GridExpand::Both,
+        GridAlignment::End,
+        GridAlignment::Fill,
+    );
+    first_art_chooser.set_padded(&ui, true);
+
+    let mut rest_art_chooser = LayoutGrid::new(&ui);
+    rest_art_chooser.append(
+        &ui,
+        Label::new(&ui, "Other songs:"),
+        0,
+        1,
+        1,
+        1,
+        GridExpand::Neither,
+        GridAlignment::Start,
+        GridAlignment::Center,
+    );
+    rest_art_chooser.append(
+        &ui,
+        rest_art.clone(),
+        1,
+        1,
+        1,
+        1,
+        GridExpand::Both,
+        GridAlignment::End,
+        GridAlignment::Fill,
+    );
+    rest_art_chooser.set_padded(&ui, true);
+
+    add_art.on_toggled(&ui, {
+        let ui = ui.clone();
+        let mut first_art = first_art.clone();
+        let mut rest_art = rest_art.clone();
+        move |add_art| {
+            if add_art {
+                first_art.enable(&ui);
+                rest_art.enable(&ui);
+            } else {
+                first_art.disable(&ui);
+                rest_art.disable(&ui);
+            }
+        }
+    });
+
     next_button.on_clicked(&ui, {
         let ui = ui.clone();
         let mut win = win.clone();
         let thread = thread.clone();
         let add = add.clone();
         let progress = progress.clone();
+        let add_artists = add_artists.clone();
+        let add_art = add_art.clone();
+        let first_art = first_art;
+        let rest_art = rest_art;
         move |_| {
             let input_path = PathBuf::from(&input_entry.value(&ui));
             let output_path = PathBuf::from(&output_entry.value(&ui));
@@ -183,15 +228,60 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
 
             let progress = progress.clone();
 
-            spawn_thread(
-                &thread,
-                bandcamp_json.clone(),
-                hsmusic.clone(),
-                input_path,
-                output_path,
-                progress,
-                tx.clone(),
-            );
+            let edits = Edits {
+                add_artists: add_artists.checked(&ui),
+                add_art: if add_art.checked(&ui) {
+                    Some(ArtTypes {
+                        first: if first_art.selected(&ui) == 0 {
+                            ArtType::AlbumArt
+                        } else {
+                            ArtType::TrackArt
+                        },
+                        rest: if rest_art.selected(&ui) == 0 {
+                            ArtType::AlbumArt
+                        } else {
+                            ArtType::TrackArt
+                        },
+                    })
+                } else {
+                    None
+                },
+            };
+
+            let hsmusic = hsmusic.clone();
+            let bandcamp_json = bandcamp_json.clone();
+            let tx = tx.clone();
+            thread.replace(Some(thread::spawn(
+                move || match std::panic::catch_unwind(|| {
+                    hsmusicifier::add_art(
+                        bandcamp_json,
+                        hsmusic,
+                        edits,
+                        true,
+                        input_path,
+                        output_path,
+                        |done, total| {
+                            progress.store((done * 100 / total) as i8, Ordering::SeqCst);
+                        },
+                    )
+                }) {
+                    Ok(Ok(())) => tx.send(Ok(())).unwrap(),
+                    Ok(Err(err)) => tx.send(Err(err)).unwrap(),
+                    Err(panic) => {
+                        let msg = match panic.downcast_ref::<&'static str>() {
+                            Some(s) => *s,
+                            None => match panic.downcast_ref::<String>() {
+                                Some(s) => &s[..],
+                                None => "Box<Any>",
+                            },
+                        };
+
+                        tx.send(Err(anyhow!("panicked at '{}'", msg))).unwrap();
+
+                        std::panic::resume_unwind(panic);
+                    }
+                },
+            )));
         }
     });
 
@@ -208,6 +298,11 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
         LayoutStrategy::Compact,
     );
     select.append(&ui, output_chooser, LayoutStrategy::Compact);
+    select.append(&ui, HorizontalSeparator::new(&ui), LayoutStrategy::Compact);
+    select.append(&ui, add_artists, LayoutStrategy::Compact);
+    select.append(&ui, add_art, LayoutStrategy::Compact);
+    select.append(&ui, first_art_chooser, LayoutStrategy::Compact);
+    select.append(&ui, rest_art_chooser, LayoutStrategy::Compact);
     select.append(&ui, Spacer::new(&ui), LayoutStrategy::Stretchy);
     select.append(&ui, next_button, LayoutStrategy::Compact);
 
