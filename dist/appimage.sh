@@ -18,10 +18,14 @@ pushd "$BUILD_DIR"
 cargo install --path="$REPO_ROOT" --root=.
 
 wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+wget https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
 
 chmod +x linuxdeploy-x86_64.AppImage
+chmod +x linuxdeploy-plugin-gtk.sh
+
 $APPIMAGE_RUN ./linuxdeploy-x86_64.AppImage \
     --appdir "$PWD/AppDir" \
+    --plugin gtk \
     --executable "$PWD/bin/hsmusicifier" \
     --desktop-file "$REPO_ROOT/dist/hsmusicifier.desktop" \
     --icon-file "$REPO_ROOT/dist/hsmusicifier.png" \

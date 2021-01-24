@@ -31,11 +31,7 @@ jobs:
           profile: minimal
           toolchain: nightly
           override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all --release
-      - name: AppImage
+      - name: Build AppImage
         run: ./dist/appimage.sh
       - uses: actions/upload-artifact@v2
         with:

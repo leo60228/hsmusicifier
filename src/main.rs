@@ -68,23 +68,32 @@ fn spawn_thread(
     )));
 }
 
+fn find_file(specified: Option<PathBuf>, name: &str) -> Result<PathBuf> {
+    Ok(match specified {
+        Some(x) => x,
+        None => {
+            let exe = current_exe()?;
+            let dir = exe.parent().context("Bad $0!")?;
+
+            let win_path = dir.join(name);
+
+            if win_path.exists() {
+                win_path
+            } else {
+                dir.parent().context("Bad $0!")?.join("share").join(name)
+            }
+        }
+    })
+}
+
 fn run(ui: UI, mut win: Window) -> Result<()> {
     let Opt {
         bandcamp_json,
         hsmusic,
     } = Opt::from_args();
 
-    let bandcamp_json = match bandcamp_json {
-        Some(x) => x,
-        None => current_exe()?
-            .parent()
-            .context("Bad $0!")?
-            .join("bandcamp.json"),
-    };
-    let hsmusic = match hsmusic {
-        Some(x) => x,
-        None => current_exe()?.parent().context("Bad $0!")?.join("hsmusic"),
-    };
+    let bandcamp_json = find_file(bandcamp_json, "bandcamp.json")?;
+    let hsmusic = find_file(hsmusic, "hsmusic")?;
 
     ensure!(bandcamp_json.is_file(), "Missing bandcamp.json!");
     ensure!(hsmusic.is_dir(), "Missing hsmusic!");

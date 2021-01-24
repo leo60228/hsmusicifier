@@ -1,6 +1,6 @@
 [package]
 name = "hsmusicifier"
-version = "0.3.0"
+version = "0.2.1"
 authors = ["leo60228 <leo@60228.dev>"]
 edition = "2018"
 
