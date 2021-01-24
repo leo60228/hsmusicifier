@@ -80,9 +80,10 @@ pub fn add_art(
         println!("{:?} -> {:?}", in_path, out_path);
 
         if let Ok(mut ictx) = ffmpeg_next::format::input(&in_path) {
-            if !ictx
-                .streams()
-                .any(|x| x.codec().medium() == media::Type::Audio)
+            if ictx.format().name() == "swf"
+                || !ictx
+                    .streams()
+                    .any(|x| x.codec().medium() == media::Type::Audio)
             {
                 if verbose {
                     println!("not audio");
