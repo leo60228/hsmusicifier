@@ -91,7 +91,7 @@ pub fn add_art(
                 continue;
             }
 
-            let file_metadata = ictx.metadata().to_owned();
+            let mut file_metadata = ictx.metadata().to_owned();
 
             let supports_art = ictx.format().name() != "ogg";
 
@@ -115,7 +115,7 @@ pub fn add_art(
                 ost.set_parameters(ist.parameters());
 
                 if ist_medium == media::Type::Audio {
-                    let track_metadata = ist.metadata().to_owned();
+                    let mut track_metadata = ist.metadata().to_owned();
 
                     let album_track = if let (Some(album), Some(track)) =
                         (get_album(&file_metadata), get_track(&file_metadata)?)
@@ -143,6 +143,33 @@ pub fn add_art(
 
                         if supports_art {
                             picture = Some(track.picture(&album, &hsmusic)?);
+                        }
+
+                        let (artist_dict, artist_name) = if track_metadata.get("artist").is_some() {
+                            (&mut track_metadata, "artist")
+                        } else if track_metadata.get("ARTIST").is_some() {
+                            (&mut track_metadata, "ARTIST")
+                        } else if file_metadata.get("artist").is_some() {
+                            (&mut file_metadata, "artist")
+                        } else if file_metadata.get("ARTIST").is_some() {
+                            (&mut file_metadata, "ARTIST")
+                        } else if track_metadata.get("track").is_some()
+                            || track_metadata.get("TRACK").is_some()
+                        {
+                            (&mut track_metadata, "artist")
+                        } else {
+                            (&mut file_metadata, "artist")
+                        };
+
+                        if let Some(artists) = &track.artists {
+                            let artists =
+                                artists.iter().map(|x| x.who).collect::<Vec<_>>().join(", ");
+
+                            if verbose {
+                                println!("artists: {}", artists);
+                            }
+
+                            artist_dict.set(artist_name, &artists);
                         }
                     }
 

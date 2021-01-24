@@ -28,7 +28,7 @@ pub struct Track<'a> {
     pub original_date: Option<&'a str>,
     pub cover_art_date: &'a str,
     pub references: Vec<&'a str>,
-    pub artists: Vec<Contributor<'a>>,
+    pub artists: Option<Vec<Contributor<'a>>>,
     pub cover_artists: Option<Vec<Contributor<'a>>>,
     pub art_tags: Vec<&'a str>,
     pub contributors: Vec<Contributor<'a>>,
@@ -107,7 +107,7 @@ fn get_list_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<Vec<&'a str>> {
 
     start_index += 1;
 
-    if start_index == end_index {
+    if start_index >= end_index {
         if let Some(value) = get_basic_field(s, name) {
             Some(value.split(',').map(|x| x.trim()).collect())
         } else {
@@ -145,7 +145,7 @@ fn get_contribution_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<Vec<Contr
         })
         .collect::<Option<_>>()?;
 
-    if mapped.len() == 1 && mapped[0].who == "none" {
+    if mapped.is_empty() || (mapped.len() == 1 && mapped[0].who == "none") {
         None
     } else {
         Some(mapped)
@@ -263,8 +263,7 @@ pub fn parse_track<'a>(
         references: get_list_field(section, "References").unwrap_or_default(),
         artists: get_contribution_field(section, "Artists")
             .or_else(|| get_contribution_field(section, "Artist"))
-            .or_else(|| artists.clone())
-            .context("missing Artists")?,
+            .or_else(|| artists.clone()),
         cover_artists: match get_contribution_field(section, "Track Art") {
             Some(cover_artists) if !cover_artists.is_empty() && cover_artists[0].who == "none" => {
                 None
