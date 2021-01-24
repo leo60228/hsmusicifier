@@ -35,10 +35,12 @@ jobs:
         with:
           command: build
           args: --all --release
+      - name: AppImage
+        run: ./dist/appimage.sh
       - uses: actions/upload-artifact@v2
         with:
-          name: linux-bin
-          path: target/release/hsmusicifier
+          name: appimage
+          path: hsmusicifier-x86_64.AppImage
 
   build-win:
     name: Build (Windows)
