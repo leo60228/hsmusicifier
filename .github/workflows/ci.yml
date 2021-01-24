@@ -69,6 +69,7 @@ jobs:
           profile: minimal
           toolchain: nightly
           override: true
+      - uses: mxschmitt/action-tmate@v3
       - uses: actions-rs/cargo@v1
         with:
           command: build
