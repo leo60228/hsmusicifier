@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Install ffmpeg
         run: |
-          Invoke-WebRequest -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2021-01-23-12-48/ffmpeg-n4.3.1-29-g89daac5fe2-win64-gpl-shared-4.3.zip
+          Invoke-WebRequest -Uri https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2021-01-23-12-48/ffmpeg-n4.3.1-29-g89daac5fe2-win64-gpl-shared-4.3.zip -OutFile ffmpeg.zip
           Expand-Archive ffmpeg.zip -DestinationPath "$env:FFMPEG_DIR"
           rm ffmpeg.zip
         env:
