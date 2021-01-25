@@ -33,8 +33,11 @@ pub fn find_hsmusic_from_bandcamp<'a, 'b>(
     bandcamp: &'a bandcamp::Track,
     albums: &'b [hsmusic::Album<'b>],
 ) -> Result<(&'b hsmusic::Album<'b>, &'b hsmusic::Track<'b>)> {
-    find_hsmusic(albums, |_, track| {
-        track.urls.iter().any(|&x| x == bandcamp.url)
+    find_hsmusic(albums, |album, track| {
+        !matches!(
+            album.name,
+            "Homestuck Vol. 1" | "Homestuck Vol. 2" | "Homestuck Vol. 3" | "Homestuck Vol. 4"
+        ) && track.urls.iter().any(|&x| x == bandcamp.url)
     })
     .ok_or_else(|| anyhow!("couldn't find track {:?}", bandcamp.name))
 }
