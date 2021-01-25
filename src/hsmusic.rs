@@ -1,6 +1,7 @@
 //! ported basically verbatim from original JS
 use super::ArtType;
 use anyhow::{ensure, Context, Result};
+use chrono::naive::NaiveDate;
 use either::{Left, Right};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -26,8 +27,8 @@ pub struct Track<'a> {
     pub name: &'a str,
     pub commentary: Option<String>,
     pub lyrics: Option<String>,
-    pub original_date: Option<&'a str>,
-    pub cover_art_date: &'a str,
+    pub original_date: Option<NaiveDate>,
+    pub cover_art_date: NaiveDate,
     pub references: Vec<&'a str>,
     pub artists: Option<Vec<Contributor<'a>>>,
     pub cover_artists: Option<Vec<Contributor<'a>>>,
@@ -67,9 +68,9 @@ impl Track<'_> {
 pub struct Album<'a> {
     pub name: &'a str,
     pub artists: Option<Vec<Contributor<'a>>>,
-    pub date: &'a str,
-    pub track_art_date: &'a str,
-    pub cover_art_date: &'a str,
+    pub date: NaiveDate,
+    pub track_art_date: NaiveDate,
+    pub cover_art_date: NaiveDate,
     pub cover_artists: Option<Vec<Contributor<'a>>>,
     pub has_track_art: bool,
     pub track_cover_artists: Option<Vec<Contributor<'a>>>,
@@ -93,6 +94,23 @@ fn get_basic_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<&'a str> {
     } else {
         None
     }
+}
+
+fn get_date_field(s: &str, name: &str) -> Result<Option<NaiveDate>> {
+    get_basic_field(s, name)
+        .map(|x| {
+            NaiveDate::parse_from_str(
+                &x[..x.match_indices(' ').nth(2).unwrap_or((x.len(), "")).0]
+                    .replace("Febuary", "February"), // pain
+                dbg!(if x.contains(',') {
+                    "%B %-d, %Y"
+                } else {
+                    "%B %-d %Y"
+                }),
+            )
+        })
+        .transpose()
+        .map_err(From::from)
 }
 
 fn get_list_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<Vec<&'a str>> {
@@ -251,19 +269,19 @@ pub fn parse_track<'a>(
     section: &'a str,
     group: &'a str,
     group_color: &'a str,
-    track_art_date: &'a str,
+    track_art_date: NaiveDate,
     artists: &Option<Vec<Contributor<'a>>>,
     color: &'a str,
     track_num: usize,
 ) -> Result<Track<'a>> {
     let name = get_basic_field(section, "Track").context("missing Track")?;
-    let original_date = get_basic_field(section, "Original Date");
+    let original_date = get_date_field(section, "Original Date")?;
     Ok(Track {
         name,
         commentary: get_multiline_field(section, "Commentary"),
         lyrics: get_multiline_field(section, "Lyrics"),
         original_date,
-        cover_art_date: get_basic_field(section, "Cover Art Date")
+        cover_art_date: get_date_field(section, "Cover Art Date")?
             .or(original_date)
             .unwrap_or(track_art_date),
         references: get_list_field(section, "References").unwrap_or_default(),
@@ -305,9 +323,9 @@ pub fn parse_album(string: &str) -> Result<Album> {
     let name = get_basic_field(album_section, "Album").context("no Album")?;
     let artists = get_contribution_field(album_section, "Artists")
         .or_else(|| get_contribution_field(album_section, "Artist"));
-    let date = get_basic_field(album_section, "Date").context("no Date")?;
+    let date = get_date_field(album_section, "Date")?.context("no Date")?;
     let color = get_basic_field(album_section, "FG").unwrap_or("#0088ff");
-    let track_art_date = get_basic_field(album_section, "Track Art Date").unwrap_or(date);
+    let track_art_date = get_date_field(album_section, "Track Art Date")?.unwrap_or(date);
 
     let mut uses_groups = false;
     let mut group = "";
@@ -342,7 +360,7 @@ pub fn parse_album(string: &str) -> Result<Album> {
         artists,
         date,
         track_art_date,
-        cover_art_date: get_basic_field(album_section, "Cover Art Date").unwrap_or(date),
+        cover_art_date: get_date_field(album_section, "Cover Art Date")?.unwrap_or(date),
         cover_artists: get_contribution_field(album_section, "Cover Art"),
         has_track_art: get_basic_field(album_section, "Has Track Art") != Some("no"),
         track_cover_artists: get_contribution_field(album_section, "Track Art"),

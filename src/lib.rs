@@ -218,8 +218,15 @@ pub fn add_art(
                         }
 
                         if edits.add_album {
+                            let date_key = if metadata_dict.get("DATE").is_some() {
+                                "DATE"
+                            } else {
+                                "date"
+                            };
+
                             metadata_dict.set(album_key, &album.name);
                             metadata_dict.set(track_key, &track.track_num.to_string());
+                            metadata_dict.set(date_key, &album.date.format("%F").to_string());
                         }
                     }
                 }
