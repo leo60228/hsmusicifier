@@ -1,57 +1,57 @@
 use anyhow::Result;
+use clap::Clap;
 use hsmusicifier::{add_art, ArtType, ArtTypes, Edits};
 use std::path::PathBuf;
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Clap)]
+#[clap(
     name = "hsmusicifier",
     about = "A tool to add track art to Homestuck music."
 )]
 struct Opt {
     /// Location of dumped bandcamp json
-    #[structopt(short, long = "bandcamp-json", parse(from_os_str))]
+    #[clap(short, long = "bandcamp-json", parse(from_os_str))]
     pub bandcamp_json: PathBuf,
 
     /// Location of hsmusic
-    #[structopt(short = "m", long, parse(from_os_str))]
+    #[clap(short = 'm', long, parse(from_os_str))]
     pub hsmusic: PathBuf,
 
     /// Verbosity
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub verbose: bool,
 
     /// Input directory
-    #[structopt(parse(from_os_str))]
+    #[clap(parse(from_os_str))]
     pub in_dir: PathBuf,
 
     /// Output directory
-    #[structopt(parse(from_os_str))]
+    #[clap(parse(from_os_str))]
     pub out_dir: PathBuf,
 
     /// Don't add art
-    #[structopt(long)]
+    #[clap(long)]
     pub no_art: bool,
 
     /// Use album or track art for first song in album
-    #[structopt(long, default_value = "album", conflicts_with = "no_art")]
+    #[clap(long, default_value = "album", conflicts_with = "no-art")]
     pub first_art: ArtType,
 
     /// Use album or track art for remaining songs in album
-    #[structopt(long, default_value = "track", conflicts_with = "no_art")]
+    #[clap(long, default_value = "track", conflicts_with = "no-art")]
     pub rest_art: ArtType,
 
     /// Don't add artists
-    #[structopt(long)]
+    #[clap(long)]
     pub no_artists: bool,
 
     /// Add album
-    #[structopt(long)]
+    #[clap(long)]
     pub album: bool,
 }
 
 fn main() -> Result<()> {
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
 
     let Opt {
         bandcamp_json,

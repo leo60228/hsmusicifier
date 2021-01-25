@@ -1,4 +1,5 @@
 use anyhow::{anyhow, ensure, Context, Result};
+use clap::Clap;
 use hsmusicifier::{ArtType, ArtTypes, Edits};
 use iui::{controls::*, prelude::*};
 use nfd::Response;
@@ -11,20 +12,19 @@ use std::sync::{
     mpsc, Arc,
 };
 use std::thread;
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
-#[structopt(
+#[derive(Clap)]
+#[clap(
     name = "hsmusicifier",
     about = "A tool to add track art to Homestuck music."
 )]
 struct Opt {
     /// Location of dumped bandcamp json
-    #[structopt(short, long = "bandcamp-json", parse(from_os_str))]
+    #[clap(short, long = "bandcamp-json", parse(from_os_str))]
     pub bandcamp_json: Option<PathBuf>,
 
     /// Location of hsmusic
-    #[structopt(short = "m", long, parse(from_os_str))]
+    #[clap(short = 'm', long, parse(from_os_str))]
     pub hsmusic: Option<PathBuf>,
 }
 
@@ -50,7 +50,7 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
     let Opt {
         bandcamp_json,
         hsmusic,
-    } = Opt::from_args();
+    } = Opt::parse();
 
     let bandcamp_json = find_file(bandcamp_json, "bandcamp.json")?;
     let hsmusic = find_file(hsmusic, "hsmusic")?;
