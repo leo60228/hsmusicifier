@@ -102,11 +102,11 @@ fn get_date_field(s: &str, name: &str) -> Result<Option<NaiveDate>> {
             NaiveDate::parse_from_str(
                 &x[..x.match_indices(' ').nth(2).unwrap_or((x.len(), "")).0]
                     .replace("Febuary", "February"), // pain
-                dbg!(if x.contains(',') {
+                if x.contains(',') {
                     "%B %-d, %Y"
                 } else {
                     "%B %-d %Y"
-                }),
+                },
             )
         })
         .transpose()
