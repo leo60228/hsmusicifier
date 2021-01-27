@@ -45,3 +45,9 @@ popd
 zip -r hsmusicifier-win.zip hsmusicifier-win/
 
 "$appimage_add" bin/hsmusicifier-x86_64.AppImage hsmusicifier-x86_64.AppImage "$appimage_rt" res/*
+
+mkdir out/
+mv -v hsmusicifier-x86_64.AppImage out/
+mv -v hsmusicifier-win.zip out/
+mv -v hsmusicifier-data.zip out/
+mv -v bin/hsmusicifier.exe out/
