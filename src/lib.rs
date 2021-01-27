@@ -197,6 +197,7 @@ pub fn add_art(
                             let (album, track) = find_hsmusic_from_album_track(
                                 &album_name,
                                 &title,
+                                track_num,
                                 &bandcamp_albums,
                                 &hsmusic_albums,
                             )?;

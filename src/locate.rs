@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 pub fn find_bandcamp_from_album_track<'a, 'b>(
     album_name: &'a str,
     title: &'a str,
+    track_num: usize,
     albums: &'b [bandcamp::Album],
 ) -> Result<Option<&'b bandcamp::Track>> {
     if let Some(album) = albums.iter().find(|x| x.name == album_name) {
@@ -11,6 +12,7 @@ pub fn find_bandcamp_from_album_track<'a, 'b>(
             .tracks
             .iter()
             .find(|x| x.name == title || x.name.splitn(2, " - ").last().unwrap_or("") == title)
+            .or_else(|| album.tracks.get(track_num - 1))
             .ok_or_else(|| {
                 anyhow!(
                     "found bandcamp album {:?} but not track {:?}",
@@ -50,6 +52,7 @@ pub fn find_hsmusic_from_bandcamp<'a, 'b>(
 fn special_hsmusic_from_album_track<'a, 'b, 'c>(
     album_name: &'a str,
     title: &'a str,
+    track_num: usize,
     bandcamp_albums: &'b [bandcamp::Album],
     hsmusic_albums: &'c [hsmusic::Album<'c>],
 ) -> Result<Option<(&'c hsmusic::Album<'c>, &'c hsmusic::Track<'c>)>> {
@@ -62,6 +65,7 @@ fn special_hsmusic_from_album_track<'a, 'b, 'c>(
         ("HIVESWAP: ACT 2 Original Soundtrack", title) => Ok(Some(find_hsmusic_from_album_track(
             "Hiveswap Act 2 OST",
             title,
+            track_num,
             bandcamp_albums,
             hsmusic_albums,
         )?)),
@@ -79,12 +83,17 @@ fn bandcamp_to_hsmusic_name(album: &str) -> &str {
 pub fn find_hsmusic_from_album_track<'a, 'b, 'c>(
     album_name: &'a str,
     title: &'a str,
+    track_num: usize,
     bandcamp_albums: &'b [bandcamp::Album],
     hsmusic_albums: &'c [hsmusic::Album<'c>],
 ) -> Result<(&'c hsmusic::Album<'c>, &'c hsmusic::Track<'c>)> {
-    if let Some(special) =
-        special_hsmusic_from_album_track(album_name, title, bandcamp_albums, hsmusic_albums)?
-    {
+    if let Some(special) = special_hsmusic_from_album_track(
+        album_name,
+        title,
+        track_num,
+        bandcamp_albums,
+        hsmusic_albums,
+    )? {
         Ok(special)
     } else if let Some(album) = hsmusic_albums
         .iter()
@@ -94,11 +103,13 @@ pub fn find_hsmusic_from_album_track<'a, 'b, 'c>(
             .tracks
             .iter()
             .find(|x| x.name == title)
+            .or_else(|| album.tracks.get(track_num - 1))
             .ok_or_else(|| anyhow!("couldn't find track {:?} in album {:?}", title, album.name))?;
         Ok((album, track))
     } else {
-        let bandcamp = find_bandcamp_from_album_track(album_name, title, bandcamp_albums)?
-            .ok_or_else(|| anyhow!("couldn't find track {:?}", title))?;
+        let bandcamp =
+            find_bandcamp_from_album_track(album_name, title, track_num, bandcamp_albums)?
+                .ok_or_else(|| anyhow!("couldn't find track {:?}", title))?;
         let hsmusic = find_hsmusic_from_bandcamp(bandcamp, hsmusic_albums)?;
         Ok(hsmusic)
     }
