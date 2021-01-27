@@ -3,6 +3,7 @@ use super::ArtType;
 use anyhow::{ensure, Context, Result};
 use chrono::naive::NaiveDate;
 use either::{Left, Right};
+use htmlescape::decode_html;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::borrow::Cow;
@@ -24,7 +25,7 @@ pub struct Artist<'a> {
 
 #[derive(Debug)]
 pub struct Track<'a> {
-    pub name: &'a str,
+    pub name: String,
     pub commentary: Option<String>,
     pub lyrics: Option<String>,
     pub original_date: Option<NaiveDate>,
@@ -275,6 +276,10 @@ pub fn parse_track<'a>(
     track_num: usize,
 ) -> Result<Track<'a>> {
     let name = get_basic_field(section, "Track").context("missing Track")?;
+    let name = decode_html(name).unwrap_or_else(|_| name.to_string());
+    let directory = get_basic_field(section, "Directory")
+        .map(From::from)
+        .unwrap_or_else(|| get_kebab_case(&name).into());
     let original_date = get_date_field(section, "Original Date")?;
     Ok(Track {
         name,
@@ -297,9 +302,7 @@ pub fn parse_track<'a>(
         },
         art_tags: get_list_field(section, "Art Tags").unwrap_or_default(),
         contributors: get_contribution_field(section, "Contributors").unwrap_or_default(),
-        directory: get_basic_field(section, "Directory")
-            .map(From::from)
-            .unwrap_or_else(|| get_kebab_case(name).into()),
+        directory,
         aka: get_basic_field(section, "AKA"),
         duration: get_duration_in_seconds(get_basic_field(section, "Duration").unwrap_or("0:00")),
         urls: get_list_field(section, "URLs").unwrap_or_default(),

@@ -61,6 +61,14 @@ fn get_track(metadata: &DictionaryRef) -> Result<Option<(&'static str, usize)>> 
         .transpose()
 }
 
+fn get_title(metadata: &DictionaryRef) -> Option<(&'static str, String)> {
+    metadata
+        .get("title")
+        .map(|x| ("title", x))
+        .or_else(|| metadata.get("TITLE").map(|x| ("TITLE", x)))
+        .map(|(k, v)| (k, v.to_string()))
+}
+
 pub fn add_art(
     bandcamp_json: PathBuf,
     hsmusic: PathBuf,
@@ -106,7 +114,7 @@ pub fn add_art(
         })
         .collect::<std::result::Result<_, _>>()?;
     let entries_count = entries.len();
-    let errors: Vec<_> = entries
+    let mut errors: Vec<_> = entries
         .into_par_iter()
         .map(|entry| {
             progress(entries_count);
@@ -163,14 +171,18 @@ pub fn add_art(
                     let mut track_metadata = ist.metadata().to_owned();
 
                     if ist_medium == media::Type::Audio {
-                        let album_track = if let (Some(album), Some(track)) =
-                            (get_album(&file_metadata), get_track(&file_metadata)?)
-                        {
-                            Some((album, track, &mut file_metadata))
-                        } else if let (Some(album), Some(track)) =
-                            (get_album(&track_metadata), get_track(&track_metadata)?)
-                        {
-                            Some((album, track, &mut track_metadata))
+                        let album_track = if let (Some(album), Some(track), Some(title)) = (
+                            get_album(&file_metadata),
+                            get_track(&file_metadata)?,
+                            get_title(&file_metadata),
+                        ) {
+                            Some((album, track, title, &mut file_metadata))
+                        } else if let (Some(album), Some(track), Some(title)) = (
+                            get_album(&track_metadata),
+                            get_track(&track_metadata)?,
+                            get_title(&track_metadata),
+                        ) {
+                            Some((album, track, title, &mut track_metadata))
                         } else {
                             None
                         };
@@ -178,12 +190,13 @@ pub fn add_art(
                         if let Some((
                             (album_key, album_name),
                             (track_key, track_num),
+                            (_, title),
                             metadata_dict,
                         )) = album_track
                         {
                             let (album, track) = find_hsmusic_from_album_track(
                                 &album_name,
-                                track_num,
+                                &title,
                                 &bandcamp_albums,
                                 &hsmusic_albums,
                             )?;
@@ -331,8 +344,11 @@ pub fn add_art(
         Ok(())
     } else {
         let mut msgs = "Errors:\n".to_string();
-        for error in errors {
-            writeln!(msgs, "{}", error)?;
+        for error in errors.drain(..10.min(errors.len())) {
+            writeln!(msgs, "* {}", error)?;
+        }
+        if !errors.is_empty() {
+            writeln!(msgs, "* ...and {} more", errors.len())?;
         }
         Err(anyhow!("{}", msgs))
     }
