@@ -173,6 +173,10 @@ pub fn add_art(
                     ost.codec().set_flags(codec::Flags::BITEXACT);
                     ost.set_parameters(ist.parameters());
 
+                    unsafe {
+                        (*ost.as_mut_ptr()).disposition = (*ist.as_ptr()).disposition;
+                    }
+
                     let mut track_metadata = ist.metadata().to_owned();
 
                     if ist_medium == media::Type::Audio {
