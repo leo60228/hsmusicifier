@@ -582,6 +582,7 @@ dependencies = [
  "clap 3.0.0-beta.2",
  "either",
  "ffmpeg-next",
+ "ffmpeg-sys-next",
  "htmlescape",
  "iui",
  "nfd",

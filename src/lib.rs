@@ -148,6 +148,10 @@ pub fn add_art(
 
                 let mut octx = ffmpeg_next::format::output(&out_path)?;
 
+                unsafe {
+                    (*octx.as_mut_ptr()).flags |= ffmpeg_sys_next::AVFMT_FLAG_BITEXACT;
+                }
+
                 let mut stream_mapping = vec![0; ictx.nb_streams() as _];
                 let mut ist_time_bases = vec![Rational(0, 1); ictx.nb_streams() as _];
                 let mut ost_index = 0;
@@ -166,6 +170,7 @@ pub fn add_art(
                     ist_time_bases[ist_index] = ist.time_base();
                     ost_index += 1;
                     let mut ost = octx.add_stream(encoder::find(codec::Id::None))?;
+                    ost.codec().set_flags(codec::Flags::BITEXACT);
                     ost.set_parameters(ist.parameters());
 
                     let mut track_metadata = ist.metadata().to_owned();
