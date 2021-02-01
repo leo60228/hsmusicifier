@@ -44,7 +44,7 @@
         inputsFrom = (makeHsmusicifier devNaersk.buildPackage).builtDependencies ++ [ ffmpeg ];
         buildInputs = [ squashfsTools (appimage-run.override {
           extraPkgs = pkgs: with pkgs; [ gmp6 ];
-        }) ];
+        }) llvmPackages.lld ];
 
         GSETTINGS_DESKTOP_SCHEMAS = "${gsettings-desktop-schemas}/share/gsettings-schemas/${gsettings-desktop-schemas.name}:${gtk3}/share/gsettings-schemas/${gtk3.name}";
         APPIMAGE_RUN = "${appimage-run}/bin/appimage-run";
