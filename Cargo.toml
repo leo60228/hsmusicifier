@@ -11,8 +11,8 @@ anyhow = "1.0.38"
 attohttpc = "0.16.1"
 either = "1.6.1"
 htmlescape = "0.3.1"
-iui = { git = "https://github.com/rust-native-ui/libui-rs.git" }
-nfd = { git = "https://github.com/saurvs/nfd-rs.git" }
+iui = { git = "https://github.com/rust-native-ui/libui-rs.git", branch = "trunk" }
+nfd = { git = "https://github.com/saurvs/nfd-rs.git", branch = "master" }
 once_cell = "1.5.2"
 regex = "1.4.3"
 scraper = "0.12.0"
