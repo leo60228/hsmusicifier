@@ -16,29 +16,32 @@
       gitignore-lib = import gitignore { inherit (pkgs) lib; };
       inherit (gitignore-lib) gitignoreSource;
       rust = pkgs.rust-bin.nightly.latest.rust;
-      naersk-lib = naersk.lib.x86_64-linux.override {
+      devRust = rust.override {
+        extensions = [ "rust-analyzer-preview" "rust-src" ];
+      };
+      makeNaersk = rust: naersk.lib.x86_64-linux.override {
         cargo = rust;
         rustc = rust;
       };
-    in rec {
-      packages = rec {
-        hsmusicifier = naersk-lib.buildPackage {
-          root = gitignoreSource ./.;
-          nativeBuildInputs = with pkgs; [ pkgconfig wrapGAppsHook git llvmPackages.llvm ];
-          buildInputs = with pkgs; [ gtk3 gsettings-desktop-schemas ffmpeg zip openssl stdenv.cc.libc ];
-          override = x: (x // {
-            LIBCLANG_PATH = "${pkgs.llvmPackages.libclang}/lib";
-            preConfigure = ''
-            export BINDGEN_EXTRA_CLANG_ARGS="-isystem ${pkgs.clang}/resource-root/include $NIX_CFLAGS_COMPILE"
-            '';
-          });
-        };
+      buildNaersk = makeNaersk rust;
+      devNaersk = makeNaersk devRust;
+      makeHsmusicifier = buildPackage: buildPackage {
+        root = gitignoreSource ./.;
+        nativeBuildInputs = with pkgs; [ pkgconfig wrapGAppsHook git llvmPackages.llvm ];
+        buildInputs = with pkgs; [ gtk3 gsettings-desktop-schemas ffmpeg zip openssl stdenv.cc.libc ];
+        override = x: (x // {
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang}/lib";
+          preConfigure = ''
+          export BINDGEN_EXTRA_CLANG_ARGS="-isystem ${pkgs.clang}/resource-root/include $NIX_CFLAGS_COMPILE"
+          '';
+        });
       };
-
+    in rec {
+      packages.hsmusicifier = makeHsmusicifier buildNaersk.buildPackage;
       defaultPackage = packages.hsmusicifier;
 
       devShell = with pkgs; mkShell {
-        inputsFrom = packages.hsmusicifier.builtDependencies ++ [ ffmpeg ];
+        inputsFrom = (makeHsmusicifier devNaersk.buildPackage).builtDependencies ++ [ ffmpeg ];
         buildInputs = [ squashfsTools (appimage-run.override {
           extraPkgs = pkgs: with pkgs; [ gmp6 ];
         }) ];
