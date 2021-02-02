@@ -12,7 +12,7 @@
     flake = false;
   };
   inputs.flake-utils.url = "github:numtide/flake-utils";
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-20.09";
 
   outputs = { nixpkgs, rust-overlay, naersk, gitignore, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem (system: let

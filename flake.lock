@@ -71,13 +71,14 @@
       "locked": {
         "lastModified": 1605721780,
         "narHash": "sha256-MhaNS4HGHcOCwW+HadSxustHTzD1LWznh584eYBvJ5Q=",
-        "path": "/nix/store/5c45nyf2kwjq40lz4nfycwkhjwg21rhn-source",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
         "rev": "58f9c4c7d3a42c912362ca68577162e38ea8edfb",
-        "type": "path"
+        "type": "github"
       },
       "original": {
         "owner": "NixOS",
-        "ref": "nixos-unstable",
+        "ref": "nixos-20.09",
         "repo": "nixpkgs",
         "type": "github"
       }
