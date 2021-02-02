@@ -1,11 +1,18 @@
 {
-  inputs.naersk.url = "github:leo60228/naersk/fetchgit-submodules";
-  inputs.rust-overlay.url = "github:oxalica/rust-overlay";
+  inputs.naersk = {
+    url = "github:leo60228/naersk/fetchgit-submodules";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
+  inputs.rust-overlay = {
+    url = "github:oxalica/rust-overlay";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
   inputs.gitignore = {
     url = "github:hercules-ci/gitignore.nix";
     flake = false;
   };
   inputs.flake-utils.url = "github:numtide/flake-utils";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs = { nixpkgs, rust-overlay, naersk, gitignore, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem (system: let

@@ -48,7 +48,9 @@
     },
     "naersk": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1612195065,
@@ -74,34 +76,10 @@
         "type": "path"
       },
       "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
-      }
-    },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1605721780,
-        "narHash": "sha256-MhaNS4HGHcOCwW+HadSxustHTzD1LWznh584eYBvJ5Q=",
-        "path": "/nix/store/5c45nyf2kwjq40lz4nfycwkhjwg21rhn-source",
-        "rev": "58f9c4c7d3a42c912362ca68577162e38ea8edfb",
-        "type": "path"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
-      }
-    },
-    "nixpkgs_3": {
-      "locked": {
-        "lastModified": 1609079092,
-        "narHash": "sha256-KhyKfxBHtZlAgudpZ0EJVzeuqROjKfVOwj8j0cuhU50=",
-        "path": "/nix/store/5pmay8rdvgw5ml1xi6189xhdbygc850k-source",
-        "rev": "2f47650c2f28d87f86ab807b8a339c684d91ec56",
-        "type": "path"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
       }
     },
     "root": {
@@ -109,14 +87,16 @@
         "flake-utils": "flake-utils",
         "gitignore": "gitignore",
         "naersk": "naersk",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay"
       }
     },
     "rust-overlay": {
       "inputs": {
         "flake-utils": "flake-utils_2",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1612147138,
