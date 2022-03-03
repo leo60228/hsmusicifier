@@ -13,9 +13,13 @@ struct Opt {
     #[clap(short, long = "bandcamp-json", parse(from_os_str))]
     pub bandcamp_json: PathBuf,
 
-    /// Location of hsmusic
+    /// Location of hsmusic-data
+    #[clap(short = 'd', long, parse(from_os_str))]
+    pub hsmusic_data: PathBuf,
+
+    /// Location of hsmusic-media
     #[clap(short = 'm', long, parse(from_os_str))]
-    pub hsmusic: PathBuf,
+    pub hsmusic_media: PathBuf,
 
     /// Verbosity
     #[clap(short, long)]
@@ -55,7 +59,8 @@ fn main() -> Result<()> {
 
     let Opt {
         bandcamp_json,
-        hsmusic,
+        hsmusic_data,
+        hsmusic_media,
         verbose,
         in_dir,
         out_dir,
@@ -81,7 +86,8 @@ fn main() -> Result<()> {
 
     add_art(
         bandcamp_json,
-        hsmusic,
+        hsmusic_data,
+        hsmusic_media,
         edits,
         verbose,
         in_dir,

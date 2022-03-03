@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Error, Result};
-use ffmpeg_next::*;
 use locate::*;
+use lofty::{ItemKey, Picture, PictureType};
 use rayon::prelude::*;
 use std::fmt::Write;
 use std::fs::{create_dir_all, read_dir, read_to_string, File};
@@ -44,54 +44,24 @@ pub struct Edits {
     pub add_album: bool,
 }
 
-fn get_album(metadata: &DictionaryRef) -> Option<(&'static str, String)> {
-    metadata
-        .get("album")
-        .map(|x| ("album", x))
-        .or_else(|| metadata.get("ALBUM").map(|x| ("ALBUM", x)))
-        .map(|(k, v)| (k, v.to_string()))
-}
-
-fn get_track(metadata: &DictionaryRef) -> Result<Option<(&'static str, usize)>> {
-    metadata
-        .get("track")
-        .map(|x| ("track", x))
-        .or_else(|| metadata.get("TRACK").map(|x| ("TRACK", x)))
-        .map(|(k, v)| Ok((k, v.parse()?)))
-        .transpose()
-}
-
-fn get_title(metadata: &DictionaryRef) -> Option<(&'static str, String)> {
-    metadata
-        .get("title")
-        .map(|x| ("title", x))
-        .or_else(|| metadata.get("TITLE").map(|x| ("TITLE", x)))
-        .map(|(k, v)| (k, v.to_string()))
-}
-
+#[allow(clippy::too_many_arguments)]
 pub fn add_art(
     bandcamp_json: PathBuf,
-    hsmusic: PathBuf,
+    mut hsmusic_data: PathBuf,
+    hsmusic_media: PathBuf,
     edits: Edits,
     verbose: bool,
     in_dir: PathBuf,
     out_dir: PathBuf,
     progress: impl Fn(usize) + Send + Sync,
 ) -> Result<()> {
-    ffmpeg_next::init()?;
-
     let bandcamp_file = File::open(bandcamp_json)?;
     let bandcamp_reader = BufReader::new(bandcamp_file);
     let bandcamp_albums: Vec<bandcamp::Album> = serde_json::from_reader(bandcamp_reader)?;
 
-    let hsmusic_albums_path = {
-        let mut p = hsmusic.clone();
-        p.push("data");
-        p.push("album");
-        p
-    };
+    hsmusic_data.push("album");
 
-    let hsmusic_album_texts: Vec<_> = read_dir(hsmusic_albums_path)?
+    let hsmusic_album_texts: Vec<_> = read_dir(hsmusic_data)?
         .map(|ent| {
             let ent = ent?;
             Ok(read_to_string(ent.path())?)
@@ -129,220 +99,84 @@ pub fn add_art(
 
             println!("{:?} -> {:?}", in_path, out_path);
 
-            if let Ok(mut ictx) = ffmpeg_next::format::input(&in_path) {
-                if ictx.format().name() == "swf"
-                    || !ictx
-                        .streams()
-                        .any(|x| x.codec().medium() == media::Type::Audio)
-                {
-                    if verbose {
-                        println!("not audio");
-                    }
-                    std::fs::copy(in_path, out_path)?;
-                    return Ok(());
-                }
+            std::fs::copy(&in_path, &out_path)?;
 
-                let mut file_metadata = ictx.metadata().to_owned();
+            if let Ok(mut metadata) = lofty::read_from_path(&in_path, false) {
+                let add_art = edits.add_art.is_some();
 
-                let add_art = edits.add_art.is_some() && ictx.format().name() != "ogg";
+                if let Some(tag) = metadata.primary_tag_mut() {
+                    if let (Some(album_name), Some(track_num), Some(title)) = (
+                        tag.get_string(&ItemKey::AlbumTitle),
+                        tag.get_string(&ItemKey::TrackNumber),
+                        tag.get_string(&ItemKey::TrackTitle),
+                    ) {
+                        let track_num = track_num.parse()?;
 
-                let mut octx = ffmpeg_next::format::output(&out_path)?;
+                        let (album, track) = find_hsmusic_from_album_track(
+                            album_name,
+                            title,
+                            track_num,
+                            &bandcamp_albums,
+                            &hsmusic_albums,
+                        )
+                        .with_context(|| {
+                            format!("failed to find hsmusic track for {:?}", in_path)
+                        })?;
 
-                unsafe {
-                    (*octx.as_mut_ptr()).flags |= ffmpeg_sys_next::AVFMT_FLAG_BITEXACT;
-                }
+                        if verbose {
+                            println!("hsmusic: {:?} - {:?}", album.name, track.name);
+                        }
 
-                let mut stream_mapping = vec![0; ictx.nb_streams() as _];
-                let mut ist_time_bases = vec![Rational(0, 1); ictx.nb_streams() as _];
-                let mut ost_index = 0;
-                let mut picture = None;
-                for (ist_index, ist) in ictx.streams().enumerate() {
-                    let ist_medium = ist.codec().medium();
-                    if ist_medium != media::Type::Audio
-                        && ist_medium != media::Type::Subtitle
-                        && add_art
-                    {
-                        stream_mapping[ist_index] = -1;
-                        continue;
-                    }
-
-                    stream_mapping[ist_index] = ost_index;
-                    ist_time_bases[ist_index] = ist.time_base();
-                    ost_index += 1;
-                    let mut ost = octx.add_stream(encoder::find(codec::Id::None))?;
-                    ost.codec().set_flags(codec::Flags::BITEXACT);
-                    ost.set_parameters(ist.parameters());
-
-                    unsafe {
-                        (*ost.as_mut_ptr()).disposition = (*ist.as_ptr()).disposition;
-                    }
-
-                    let mut track_metadata = ist.metadata().to_owned();
-
-                    if ist_medium == media::Type::Audio {
-                        let album_track = if let (Some(album), Some(track), Some(title)) = (
-                            get_album(&file_metadata),
-                            get_track(&file_metadata)?,
-                            get_title(&file_metadata),
-                        ) {
-                            Some((album, track, title, &mut file_metadata))
-                        } else if let (Some(album), Some(track), Some(title)) = (
-                            get_album(&track_metadata),
-                            get_track(&track_metadata)?,
-                            get_title(&track_metadata),
-                        ) {
-                            Some((album, track, title, &mut track_metadata))
-                        } else {
-                            None
-                        };
-
-                        if let Some((
-                            (album_key, album_name),
-                            (track_key, track_num),
-                            (_, title),
-                            metadata_dict,
-                        )) = album_track
-                        {
-                            let (album, track) = find_hsmusic_from_album_track(
-                                &album_name,
-                                &title,
-                                track_num,
-                                &bandcamp_albums,
-                                &hsmusic_albums,
-                            )?;
-
-                            if verbose {
-                                println!("hsmusic: {:?} - {:?}", album.name, track.name);
-                            }
-
-                            if add_art {
-                                if let Some(ArtTypes { first, rest }) = edits.add_art {
-                                    let track_num = if edits.add_album {
-                                        track.track_num
-                                    } else {
-                                        track_num
-                                    };
-                                    let art = if track_num <= 1 { first } else { rest };
-                                    picture = Some(track.picture(&album, &hsmusic, art)?);
-                                }
-                            }
-
-                            if edits.add_artists {
-                                let artist_key = if metadata_dict.get("ARTIST").is_some() {
-                                    "ARTIST"
+                        if add_art {
+                            if let Some(ArtTypes { first, rest }) = edits.add_art {
+                                let track_num = if edits.add_album {
+                                    track.track_num
                                 } else {
-                                    "artist"
+                                    track_num
                                 };
+                                let art = if track_num <= 1 { first } else { rest };
+                                let path = track.picture(album, &hsmusic_media, art)?;
 
-                                if let Some(artists) = &track.artists {
-                                    let artists = artists
-                                        .iter()
-                                        .map(|x| x.who)
-                                        .collect::<Vec<_>>()
-                                        .join(", ");
+                                let mut picture = Picture::from_reader(
+                                    &mut File::open(path).context("failed to open picture")?,
+                                )
+                                .context("failed to create Picture")?;
+                                picture.set_pic_type(PictureType::CoverFront);
 
-                                    if verbose {
-                                        println!("artists: {}", artists);
-                                    }
+                                tag.remove_picture_type(PictureType::CoverFront);
+                                tag.push_picture(picture);
+                            }
+                        }
 
-                                    metadata_dict.set(artist_key, &artists);
+                        if edits.add_artists {
+                            if let Some(artists) = &track.artists {
+                                let artists =
+                                    artists.iter().map(|x| x.who).collect::<Vec<_>>().join(", ");
+
+                                if verbose {
+                                    println!("artists: {}", artists);
                                 }
-                            }
 
-                            if edits.add_album {
-                                let date_key = if metadata_dict.get("DATE").is_some() {
-                                    "DATE"
-                                } else {
-                                    "date"
-                                };
-
-                                metadata_dict.set(album_key, &album.name);
-                                metadata_dict.set(track_key, &track.track_num.to_string());
-                                metadata_dict.set(date_key, &album.date.format("%F").to_string());
+                                tag.insert_text(ItemKey::TrackArtist, artists);
                             }
                         }
-                    }
 
-                    ost.set_metadata(track_metadata);
-
-                    // We need to set codec_tag to 0 lest we run into incompatible codec tag
-                    // issues when muxing into a different container format. Unfortunately
-                    // there's no high level API to do this (yet).
-                    unsafe {
-                        (*ost.parameters().as_mut_ptr()).codec_tag = 0;
-                    }
-                }
-
-                if add_art {
-                    let mut pctx =
-                        ffmpeg_next::format::input(&picture.context("couldn't find metadata")?)?;
-                    let pst = pctx.streams().next().context("couldn't read art")?;
-                    let mut opst = octx.add_stream(encoder::find(codec::Id::None))?;
-                    opst.set_parameters(pst.parameters());
-                    unsafe {
-                        (*opst.parameters().as_mut_ptr()).codec_tag = 0;
-                    }
-
-                    let mut picture_metadata = Dictionary::new();
-                    picture_metadata.set("title", "cover");
-                    picture_metadata.set("comment", "Cover (front)");
-                    opst.set_metadata(picture_metadata);
-
-                    unsafe {
-                        (*opst.as_mut_ptr()).disposition =
-                            format::stream::disposition::Disposition::ATTACHED_PIC.bits();
-                    }
-
-                    let pst_time_base = pst.time_base();
-
-                    octx.set_metadata(file_metadata);
-                    octx.write_header()?;
-
-                    for (stream, mut packet) in ictx.packets() {
-                        let ist_index = stream.index();
-                        let ost_index = stream_mapping[ist_index];
-                        if ost_index < 0 {
-                            continue;
+                        if edits.add_album {
+                            tag.insert_text(ItemKey::AlbumTitle, album.name.to_string());
+                            tag.insert_text(ItemKey::TrackNumber, track.track_num.to_string());
+                            tag.insert_text(
+                                ItemKey::RecordingDate,
+                                album.date.format("%F").to_string(),
+                            );
                         }
-                        let ost = octx.stream(ost_index as _).unwrap();
-                        packet.rescale_ts(ist_time_bases[ist_index], ost.time_base());
-                        packet.set_position(-1);
-                        packet.set_stream(ost_index as _);
-                        packet.write_interleaved(&mut octx)?;
-                    }
-
-                    for (_, mut packet) in pctx.packets() {
-                        let ost = octx.stream(ost_index as _).unwrap();
-                        packet.rescale_ts(pst_time_base, ost.time_base());
-                        packet.set_position(-1);
-                        packet.set_stream(ost_index as _);
-                        packet.write_interleaved(&mut octx)?;
-                    }
-                } else {
-                    octx.set_metadata(file_metadata);
-                    octx.write_header()?;
-
-                    for (stream, mut packet) in ictx.packets() {
-                        let ist_index = stream.index();
-                        let ost_index = stream_mapping[ist_index];
-                        if ost_index < 0 {
-                            continue;
-                        }
-                        let ost = octx.stream(ost_index as _).unwrap();
-                        packet.rescale_ts(ist_time_bases[ist_index], ost.time_base());
-                        packet.set_position(-1);
-                        packet.set_stream(ost_index as _);
-                        packet.write_interleaved(&mut octx)?;
                     }
                 }
 
-                octx.write_trailer()?;
-            } else {
-                if verbose {
-                    println!("not ffmpeg");
-                }
-
-                std::fs::copy(in_path, out_path)?;
+                metadata
+                    .save_to_path(&out_path)
+                    .context("failed to write metadata")?;
+            } else if verbose {
+                println!("not audio");
             }
 
             Ok(())
@@ -354,8 +188,8 @@ pub fn add_art(
         Ok(())
     } else {
         let mut msgs = "Errors:\n".to_string();
-        for error in errors.drain(..10.min(errors.len())) {
-            writeln!(msgs, "* {}", error)?;
+        for error in errors.drain(..5.min(errors.len())) {
+            writeln!(msgs, "* {:?}", error)?;
         }
         if !errors.is_empty() {
             writeln!(msgs, "* ...and {} more", errors.len())?;

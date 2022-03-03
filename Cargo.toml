@@ -20,8 +20,7 @@ serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 url = "2.2.2"
 walkdir = "2.3.2"
-ffmpeg-next = "4.4.0"
-ffmpeg-sys-next = { version = "4.4.0", default-features = false }
 rayon = "1.5.1"
 clap = { version = "3.1.5", features = ["derive"] }
 chrono = "0.4.19"
+lofty = "0.5.2"

@@ -1,5 +1,5 @@
 use anyhow::{anyhow, ensure, Context, Result};
-use clap::Clap;
+use clap::Parser;
 use hsmusicifier::{ArtType, ArtTypes, Edits};
 use iui::{controls::*, prelude::*};
 use nfd::Response;
@@ -13,7 +13,7 @@ use std::sync::{
 };
 use std::thread;
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(
     name = "hsmusicifier",
     about = "A tool to add track art to Homestuck music."
@@ -23,9 +23,13 @@ struct Opt {
     #[clap(short, long = "bandcamp-json", parse(from_os_str))]
     pub bandcamp_json: Option<PathBuf>,
 
-    /// Location of hsmusic
+    /// Location of hsmusic-data
+    #[clap(short = 'd', long, parse(from_os_str))]
+    pub hsmusic_data: Option<PathBuf>,
+
+    /// Location of hsmusic-media
     #[clap(short = 'm', long, parse(from_os_str))]
-    pub hsmusic: Option<PathBuf>,
+    pub hsmusic_media: Option<PathBuf>,
 }
 
 fn find_file(specified: Option<PathBuf>, name: &str) -> Result<PathBuf> {
@@ -49,14 +53,17 @@ fn find_file(specified: Option<PathBuf>, name: &str) -> Result<PathBuf> {
 fn run(ui: UI, mut win: Window) -> Result<()> {
     let Opt {
         bandcamp_json,
-        hsmusic,
+        hsmusic_data,
+        hsmusic_media,
     } = Opt::parse();
 
     let bandcamp_json = find_file(bandcamp_json, "bandcamp.json")?;
-    let hsmusic = find_file(hsmusic, "hsmusic")?;
+    let hsmusic_data = find_file(hsmusic_data, "hsmusic-data")?;
+    let hsmusic_media = find_file(hsmusic_media, "hsmusic-media")?;
 
     ensure!(bandcamp_json.is_file(), "Missing bandcamp.json!");
-    ensure!(hsmusic.is_dir(), "Missing hsmusic!");
+    ensure!(hsmusic_data.is_dir(), "Missing hsmusic-data!");
+    ensure!(hsmusic_media.is_dir(), "Missing hsmusic-media!");
 
     let (tx, rx) = mpsc::channel();
     let progress = Arc::new(AtomicIsize::new(-1));
@@ -256,14 +263,16 @@ fn run(ui: UI, mut win: Window) -> Result<()> {
                 add_album: add_album.checked(&ui),
             };
 
-            let hsmusic = hsmusic.clone();
+            let hsmusic_data = hsmusic_data.clone();
+            let hsmusic_media = hsmusic_media.clone();
             let bandcamp_json = bandcamp_json.clone();
             let tx = tx.clone();
             thread.replace(Some(thread::spawn(
                 move || match std::panic::catch_unwind(|| {
                     hsmusicifier::add_art(
                         bandcamp_json,
-                        hsmusic,
+                        hsmusic_data,
+                        hsmusic_media,
                         edits,
                         true,
                         input_path,

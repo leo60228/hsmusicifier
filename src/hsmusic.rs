@@ -47,7 +47,6 @@ pub struct Track<'a> {
 impl Track<'_> {
     pub fn picture(&self, album: &Album, path: impl AsRef<Path>, art: ArtType) -> Result<PathBuf> {
         let mut path: PathBuf = path.as_ref().into();
-        path.push("media");
         path.push("album-art");
         path.push(&*album.directory);
         path.push(match art {
@@ -132,11 +131,7 @@ fn get_list_field<'a, 'b>(s: &'a str, name: &'b str) -> Option<Vec<&'a str>> {
     start_index += 1;
 
     if start_index >= end_index {
-        if let Some(value) = get_basic_field(s, name) {
-            Some(value.split(',').map(|x| x.trim()).collect())
-        } else {
-            None
-        }
+        get_basic_field(s, name).map(|value| value.split(',').map(|x| x.trim()).collect())
     } else {
         Some(
             s.lines()
@@ -240,7 +235,7 @@ static SPLIT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("(?m)^-{8,}\n").unwrap
 pub fn parse_artist(string: &str) -> Result<Artist> {
     Ok(Artist {
         name: get_basic_field(string, "Artist").context("no Artist")?,
-        urls: get_list_field(string, "URLs").unwrap_or_else(Vec::new),
+        urls: get_list_field(string, "URLs").unwrap_or_default(),
         alias: get_basic_field(string, "Alias"),
         note: get_multiline_field(string, "Note"),
     })

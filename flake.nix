@@ -35,7 +35,7 @@
       makeHsmusicifier = buildPackage: buildPackage {
         root = gitignoreSource ./.;
         nativeBuildInputs = with pkgs; [ pkgconfig wrapGAppsHook git llvmPackages.llvm ];
-        buildInputs = with pkgs; [ gtk3 gsettings-desktop-schemas ffmpeg zip openssl stdenv.cc.libc ];
+        buildInputs = with pkgs; [ gtk3 gsettings-desktop-schemas zip openssl stdenv.cc.libc ];
         override = x: (x // {
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang}/lib";
           preConfigure = ''
@@ -48,7 +48,7 @@
       defaultPackage = packages.hsmusicifier;
 
       devShell = with pkgs; mkShell {
-        inputsFrom = (makeHsmusicifier devNaersk.buildPackage).builtDependencies ++ [ ffmpeg ];
+        inputsFrom = (makeHsmusicifier devNaersk.buildPackage).builtDependencies;
         buildInputs = [ squashfsTools (appimage-run.override {
           extraPkgs = pkgs: with pkgs; [ gmp6 ];
         }) llvmPackages.lld ];
