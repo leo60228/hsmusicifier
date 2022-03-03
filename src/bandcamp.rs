@@ -27,7 +27,7 @@ fn album_urls() -> Result<Vec<String>> {
         .map(|x| {
             let href = x.value().attr("href").context("missing href")?.to_string();
             let url = base_url.join(&href)?;
-            Ok(url.into_string())
+            Ok(url.into())
         })
         .collect()
 }

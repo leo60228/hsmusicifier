@@ -1,6 +1,6 @@
 {
   inputs.naersk = {
-    url = "github:leo60228/naersk/fetchgit-submodules";
+    url = "github:nix-community/naersk";
     inputs.nixpkgs.follows = "nixpkgs";
   };
   inputs.rust-overlay = {
@@ -12,7 +12,7 @@
     flake = false;
   };
   inputs.flake-utils.url = "github:numtide/flake-utils";
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-20.09";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.11";
 
   outputs = { nixpkgs, rust-overlay, naersk, gitignore, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem (system: let
@@ -22,7 +22,7 @@
       };
       gitignore-lib = import gitignore { inherit (pkgs) lib; };
       inherit (gitignore-lib) gitignoreSource;
-      rust = pkgs.rust-bin.nightly.latest.rust;
+      rust = pkgs.rust-bin.nightly.latest.default;
       devRust = rust.override {
         extensions = [ "rust-analyzer-preview" "rust-src" ];
       };

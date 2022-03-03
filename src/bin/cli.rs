@@ -1,9 +1,9 @@
 use anyhow::Result;
-use clap::Clap;
+use clap::Parser;
 use hsmusicifier::{add_art, ArtType, ArtTypes, Edits};
 use std::path::PathBuf;
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(
     name = "hsmusicifier",
     about = "A tool to add track art to Homestuck music."

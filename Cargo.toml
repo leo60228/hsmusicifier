@@ -7,21 +7,21 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.38"
-attohttpc = "0.16.1"
+anyhow = "1.0.55"
+attohttpc = "0.18.0"
 either = "1.6.1"
 htmlescape = "0.3.1"
 iui = { git = "https://github.com/rust-native-ui/libui-rs.git", branch = "trunk" }
 nfd = { git = "https://github.com/saurvs/nfd-rs.git", branch = "master" }
-once_cell = "1.5.2"
-regex = "1.4.3"
+once_cell = "1.10.0"
+regex = "1.5.4"
 scraper = "0.12.0"
-serde = { version = "1.0.120", features = ["derive"] }
-serde_json = "1.0.61"
-url = "2.2.0"
-walkdir = "2.3.1"
-ffmpeg-next = "4.3.8"
-ffmpeg-sys-next = { version = "4.3.5", default-features = false }
-rayon = "1.5.0"
-clap = "3.0.0-beta.2"
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.79"
+url = "2.2.2"
+walkdir = "2.3.2"
+ffmpeg-next = "4.4.0"
+ffmpeg-sys-next = { version = "4.4.0", default-features = false }
+rayon = "1.5.1"
+clap = { version = "3.1.5", features = ["derive"] }
 chrono = "0.4.19"
