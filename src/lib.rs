@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Error, Result};
 use locate::*;
-use lofty::{ItemKey, Picture, PictureType, Tag};
+use lofty::{ItemKey, Picture, PictureType};
 use rayon::prelude::*;
 use std::fmt::Write;
 use std::fs::{create_dir_all, read_dir, read_to_string, File};
@@ -101,8 +101,8 @@ pub fn add_art(
 
             std::fs::copy(&in_path, &out_path)?;
 
-            let info = if let Ok(mut metadata) = lofty::read_from_path(&in_path, false) {
-                if let Some(tag) = metadata.first_tag_mut() {
+            if let Ok(mut metadata) = lofty::read_from_path(&in_path, false) {
+                let info = if let Some(tag) = metadata.first_tag_mut() {
                     if let (Some(album_name), Some(track_num), Some(title)) = (
                         tag.get_string(&ItemKey::AlbumTitle),
                         tag.get_string(&ItemKey::TrackNumber),
@@ -121,71 +121,68 @@ pub fn add_art(
                             format!("failed to find hsmusic track for {:?}", in_path)
                         })?;
 
-                        Some((metadata, track_num, album, track))
+                        Some((tag, track_num, album, track))
                     } else {
                         None
                     }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
-
-            if let Some((mut metadata, track_num, album, track)) = info {
-                let tag = if let Some(tag) = metadata.first_tag_mut() {
-                    tag
-                } else {
-                    metadata.insert_tag(Tag::new(metadata.primary_tag_type()));
-                    metadata.primary_tag_mut().unwrap()
                 };
 
-                if verbose {
-                    println!("hsmusic: {:?} - {:?}", album.name, track.name);
-                }
-
-                if edits.add_art.is_some() {
-                    if let Some(ArtTypes { first, rest }) = edits.add_art {
-                        let track_num = if edits.add_album {
-                            track.track_num
-                        } else {
-                            track_num
-                        };
-                        let art = if track_num <= 1 { first } else { rest };
-                        let path = track.picture(album, &hsmusic_media, art)?;
-
-                        let mut picture = Picture::from_reader(
-                            &mut File::open(path).context("failed to open picture")?,
-                        )
-                        .context("failed to create Picture")?;
-                        picture.set_pic_type(PictureType::CoverFront);
-
-                        tag.remove_picture_type(PictureType::CoverFront);
-                        tag.push_picture(picture);
+                if let Some((tag, track_num, album, track)) = info {
+                    if verbose {
+                        println!("hsmusic: {:?} - {:?}", album.name, track.name);
                     }
-                }
 
-                if edits.add_artists {
-                    if let Some(artists) = &track.artists {
-                        let artists = artists.iter().map(|x| x.who).collect::<Vec<_>>().join(", ");
+                    if edits.add_art.is_some() {
+                        if let Some(ArtTypes { first, rest }) = edits.add_art {
+                            let track_num = if edits.add_album {
+                                track.track_num
+                            } else {
+                                track_num
+                            };
+                            let art = if track_num <= 1 { first } else { rest };
+                            let path = track.picture(album, &hsmusic_media, art)?;
 
-                        if verbose {
-                            println!("artists: {}", artists);
+                            let mut picture = Picture::from_reader(
+                                &mut File::open(path).context("failed to open picture")?,
+                            )
+                            .context("failed to create Picture")?;
+                            picture.set_pic_type(PictureType::CoverFront);
+
+                            tag.remove_picture_type(PictureType::CoverFront);
+                            tag.push_picture(picture);
                         }
-
-                        tag.insert_text(ItemKey::TrackArtist, artists);
                     }
-                }
 
-                if edits.add_album {
-                    tag.insert_text(ItemKey::AlbumTitle, album.name.to_string());
-                    tag.insert_text(ItemKey::TrackNumber, track.track_num.to_string());
-                    tag.insert_text(ItemKey::RecordingDate, album.date.format("%F").to_string());
-                }
+                    if edits.add_artists {
+                        if let Some(artists) = &track.artists {
+                            let artists =
+                                artists.iter().map(|x| x.who).collect::<Vec<_>>().join(", ");
 
-                metadata
-                    .save_to_path(&out_path)
-                    .context("failed to write metadata")?;
+                            if verbose {
+                                println!("artists: {}", artists);
+                            }
+
+                            tag.insert_text(ItemKey::TrackArtist, artists);
+                        }
+                    }
+
+                    if edits.add_album {
+                        tag.insert_text(ItemKey::AlbumTitle, album.name.to_string());
+                        tag.insert_text(ItemKey::TrackNumber, track.track_num.to_string());
+                        tag.insert_text(
+                            ItemKey::RecordingDate,
+                            album.date.format("%F").to_string(),
+                        );
+                    }
+
+                    metadata
+                        .save_to_path(&out_path)
+                        .context("failed to write metadata")?;
+                }
+            } else if verbose {
+                println!("not audio");
             }
 
             Ok(())
