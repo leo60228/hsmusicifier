@@ -1,5 +1,6 @@
 use crate::{bandcamp, hsmusic};
 use anyhow::{anyhow, Result};
+use itertools::Itertools;
 
 pub fn find_bandcamp_from_album_track<'a, 'b>(
     album_name: &'a str,
@@ -113,4 +114,16 @@ pub fn find_hsmusic_from_album_track<'a, 'b, 'c>(
         let hsmusic = find_hsmusic_from_bandcamp(bandcamp, hsmusic_albums)?;
         Ok(hsmusic)
     }
+}
+
+pub fn find_hsmusic_from_title<'a, 'b>(
+    title: &'a str,
+    hsmusic_albums: &'b [hsmusic::Album<'b>],
+) -> Option<(&'b hsmusic::Album<'b>, &'b hsmusic::Track<'b>)> {
+    hsmusic_albums
+        .iter()
+        .flat_map(|album| album.tracks.iter().map(move |track| (album, track)))
+        .filter(|(_album, track)| track.name == title)
+        .exactly_one()
+        .ok()
 }

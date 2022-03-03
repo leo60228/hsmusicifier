@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Error, Result};
 use locate::*;
-use lofty::{ItemKey, Picture, PictureType};
+use lofty::{ItemKey, Picture, PictureType, Tag};
 use rayon::prelude::*;
 use std::fmt::Write;
 use std::fs::{create_dir_all, read_dir, read_to_string, File};
@@ -125,6 +125,17 @@ pub fn add_art(
                     } else {
                         None
                     }
+                } else if let Some((album, track)) = in_path
+                    .file_stem()
+                    .and_then(|x| x.to_str())
+                    .and_then(|x| x.split_once(" - "))
+                    .and_then(|(_artist, title)| find_hsmusic_from_title(title, &hsmusic_albums))
+                {
+                    metadata.insert_tag(Tag::new(metadata.primary_tag_type()));
+                    let tag = metadata.primary_tag_mut().unwrap();
+                    tag.insert_text(ItemKey::TrackTitle, track.name.to_string());
+                    tag.insert_text(ItemKey::AlbumArtist, "Homestuck".to_string());
+                    Some((tag, track.track_num, album, track))
                 } else {
                     None
                 };
