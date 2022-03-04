@@ -99,7 +99,9 @@ pub fn add_art(
 
             println!("{:?} -> {:?}", in_path, out_path);
 
-            std::fs::copy(&in_path, &out_path)?;
+            if out_path != in_path {
+                std::fs::copy(&in_path, &out_path)?;
+            }
 
             if let Ok(mut metadata) = lofty::read_from_path(&in_path, false) {
                 let info = if let Some(tag) = metadata.first_tag_mut() {
