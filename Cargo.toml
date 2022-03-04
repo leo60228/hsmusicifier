@@ -25,3 +25,4 @@ clap = { version = "3.1.5", features = ["derive"] }
 chrono = "0.4.19"
 lofty = "0.5.3"
 itertools = "0.10.3"
+embed-resource = "=1.6.5"

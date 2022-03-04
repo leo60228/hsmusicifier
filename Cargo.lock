@@ -376,12 +376,11 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
 name = "embed-resource"
-version = "1.7.0"
+version = "1.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a67cf9ea56dfbdbeef8e0a5ab9af98ec1be2c00f86e7b82f16d7614f924d6d8"
+checksum = "85505eb239fc952b300f29f0556d2d884082a83566768d980278d8faf38c780d"
 dependencies = [
  "cc",
- "rustc_version",
  "vswhom",
  "winreg",
 ]
@@ -560,6 +559,7 @@ dependencies = [
  "chrono",
  "clap 3.1.5",
  "either",
+ "embed-resource",
  "htmlescape",
  "itertools",
  "iui",
