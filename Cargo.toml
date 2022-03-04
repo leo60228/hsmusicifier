@@ -25,6 +25,3 @@ clap = { version = "3.1.5", features = ["derive"] }
 chrono = "0.4.19"
 lofty = "0.5.3"
 itertools = "0.10.3"
-
-[patch.crates-io]
-embed-resource = { git = "https://github.com/nabijaczleweli/rust-embed-resource.git" }

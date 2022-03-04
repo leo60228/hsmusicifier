@@ -376,8 +376,9 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
 name = "embed-resource"
-version = "1.7.0"
-source = "git+https://github.com/nabijaczleweli/rust-embed-resource.git#b39869d15e9fc3283a26c4b6ddbb1a7db083bad8"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e813aabad49e547de6abcc81004dfced79226fb3a14d73c26aabc2816ee8c7f"
 dependencies = [
  "cc",
  "rustc_version",
